@@ -1,0 +1,9 @@
+metric,value,unit
+MAE,1.6579062208994682,mph
+RMSE,2.171346912625414,mph
+MAPE,2.59547880662266,%
+R_squared,-0.30276400584557916,dimensionless
+Mean_Error,-0.837044149470899,mph
+Mean_Predicted_Std,2.599722775,mph
+Mean_JS_Divergence,0.592241099837565,bits
+Mean_KL_Divergence,19.761697163410936,bits

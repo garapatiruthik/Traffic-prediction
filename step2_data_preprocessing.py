@@ -1,4 +1,4 @@
-e"""
+"""
 Step 2: Data Preprocessing - Merge METR-LA Traffic + Weather Data
 ==================================================================
 This script merges the METR-LA traffic data with the downloaded weather data.
@@ -174,4 +174,4 @@ else:
     print("=" * 60)
     print("\nNext steps:")
     print("  1. Run step3_chronos_inference.py for forecasting")
-    print("  2. Run step4_evaluation_metrics.py for model evaluation")
+    print("  2. Run step4_evaluation_metrics.py for model evaluation")

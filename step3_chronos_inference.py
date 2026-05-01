@@ -37,13 +37,11 @@ MODEL_NAME = "amazon/chronos-t5-small"  # Options: small, base, large
 PREDICTION_LENGTH = 12  # Predict next 12 timesteps (1 hour at 5-min intervals)
 CONTEXT_LENGTH = 144   # Use past 144 timesteps (12 hours of history)
 NUM_SAMPLES = 100       # Number of samples for probabilistic forecasting
-TEMPERATURE = 0.7       # Sampling temperature (controls uncertainty)
 
 print(f"   - Model: {MODEL_NAME}")
 print(f"   - Prediction length: {PREDICTION_LENGTH} timesteps (1 hour)")
 print(f"   - Context length: {CONTEXT_LENGTH} timesteps (12 hours)")
 print(f"   - Num samples: {NUM_SAMPLES}")
-print(f"   - Temperature: {TEMPERATURE}")
 
 # Check for GPU
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -84,7 +82,6 @@ start_time = time.time()
 pipeline = ChronosPipeline.from_pretrained(
     MODEL_NAME,
     device_map=device,
-    torch_dtype=torch.float32
 )
 
 load_time = time.time() - start_time
@@ -96,14 +93,12 @@ print(f"   Model loaded in {load_time:.2f} seconds")
 print("\n[3.4] Preparing data for forecasting...")
 
 # Extract traffic speed time series
-# Chronos expects the data to be normalized (which it will do internally)
 traffic_series = df['traffic_speed'].values
 
 print(f"   - Total timesteps: {len(traffic_series)}")
 print(f"   - Traffic speed range: {traffic_series.min():.2f} - {traffic_series.max():.2f} mph")
 
 # Calculate how many forecast windows we can generate
-# We need CONTEXT_LENGTH + PREDICTION_LENGTH for each forecast
 total_needed = CONTEXT_LENGTH + PREDICTION_LENGTH
 num_forecasts = (len(traffic_series) - total_needed) // PREDICTION_LENGTH
 
@@ -115,9 +110,6 @@ print(f"   - Using last {total_needed} timesteps for demonstration")
 # ============================================================================
 print("\n[3.5] Running zero-shot forecasting...")
 
-# For demonstration, we'll forecast the last available window
-# In production, you would loop over multiple windows
-
 # Get the context (last CONTEXT_LENGTH timesteps before the test period)
 context = traffic_series[:-PREDICTION_LENGTH][-CONTEXT_LENGTH:]
 print(f"   - Context shape: {context.shape}")
@@ -127,12 +119,9 @@ print(f"   - Context period: {df.index[-CONTEXT_LENGTH-PREDICTION_LENGTH]} to {d
 print(f"   Running inference (this may take a minute)...")
 start_inference = time.time()
 
-# Chronos expects context as a tensor
-context_tensor = torch.tensor(context, dtype=torch.float32).unsqueeze(0)  # Add batch dimension
-
-# Run forecast
+# Chronos expects context as a tensor - use the forecast method
 forecast = pipeline.predict(
-    context=context_tensor,
+    inputs=torch.tensor(context, dtype=torch.float32).unsqueeze(0),
     prediction_length=PREDICTION_LENGTH,
     num_samples=NUM_SAMPLES
 )
@@ -140,8 +129,9 @@ forecast = pipeline.predict(
 inference_time = time.time() - start_inference
 print(f"   - Inference time: {inference_time:.2f} seconds")
 
-# Output shape: (batch_size, num_samples, prediction_length)
-# We'll have (1, NUM_SAMPLES, PREDICTION_LENGTH)
+# Output shape: (batch_size, num_samples, prediction_length) = (1, 100, 12)
+# Need to squeeze batch dimension first
+forecast = forecast.squeeze(0)  # Now (100, 12)
 print(f"   - Forecast shape: {forecast.shape}")
 
 # ============================================================================
@@ -154,9 +144,11 @@ actual = traffic_series[-PREDICTION_LENGTH:]
 print(f"   - Actual values shape: {actual.shape}")
 
 # Calculate statistics from forecast samples
-forecast_mean = forecast.squeeze(0).mean(dim=0).numpy()  # Mean prediction
-forecast_std = forecast.squeeze(0).std(dim=0).numpy()   # Prediction uncertainty
-forecast_median = np.median(forecast.squeeze(0).numpy(), axis=0)
+# forecast shape is now (num_samples, prediction_length) = (100, 12)
+forecast_np = forecast.numpy()  # Convert to numpy for easier handling
+forecast_mean = forecast_np.mean(axis=0)  # Mean across samples (axis=0)
+forecast_std = forecast_np.std(axis=0)    # Std across samples (axis=0)
+forecast_median = np.median(forecast_np, axis=0)
 
 print(f"   - Predicted mean range: {forecast_mean.min():.2f} - {forecast_mean.max():.2f} mph")
 print(f"   - Predicted std range: {forecast_std.min():.2f} - {forecast_std.max():.2f} mph")
@@ -180,7 +172,7 @@ predictions_df = pd.DataFrame({
 
 # Add individual samples for KL divergence calculation
 for i in range(min(NUM_SAMPLES, 10)):  # Save first 10 samples
-    predictions_df[f'sample_{i}'] = forecast.squeeze(0)[i].numpy()
+    predictions_df[f'sample_{i}'] = forecast[i].numpy()
 
 # Save to CSV
 output_file = 'chronos_predictions.csv'
@@ -222,7 +214,6 @@ model_info = {
     'prediction_length': PREDICTION_LENGTH,
     'context_length': CONTEXT_LENGTH,
     'num_samples': NUM_SAMPLES,
-    'temperature': TEMPERATURE,
     'device': device,
     'model_load_time': load_time,
     'inference_time': inference_time,
@@ -241,4 +232,5 @@ print("\n" + "=" * 60)
 print("STEP 3 COMPLETE: Chronos-2 inference finished!")
 print("=" * 60)
 print("\nNext step:")
-print("  - Run step4_evaluation_metrics.py for detailed
+print("  - Run step4_evaluation_metrics.py for detailed evaluation")
+print("    including KL Divergence analysis")

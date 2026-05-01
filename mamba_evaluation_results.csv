@@ -1,0 +1,2 @@
+MAE,RMSE,KL_Divergence,Inference_Latency_ms,Epochs,Batch_Size,Learning_Rate,D_Model,Num_Mamba_Layers,Lookback_Window,Forecast_Horizon
+4.3511763,8.723959,2.72373366355896,5.441418400517216,10,64,0.001,64,2,24,12

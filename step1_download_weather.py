@@ -50,7 +50,7 @@ if response.status_code == 200:
     csv_filename = "LA_Weather_Hourly_2012_Full.csv"
     df_weather.to_csv(csv_filename, index=False)
     
-    print(f"\n✅ SUCCESS! Saved as: {csv_filename}")
+    print(f"\nSUCCESS! Saved as: {csv_filename}")
     print(f"   Total rows: {len(df_weather)}")
     print(f"   Date range: {df_weather['datetime'].min()} to {df_weather['datetime'].max()}")
     print(f"\n   First 5 rows:")
@@ -63,5 +63,5 @@ if response.status_code == 200:
     print(f"   - Wind Speed: {df_weather['wind_speed_kmh'].min():.1f} to {df_weather['wind_speed_kmh'].max():.1f} km/h")
     
 else:
-    print(f"❌ Failed to fetch data. Error code: {response.status_code}")
+    print(f"FAILED: Failed to fetch data. Error code: {response.status_code}")
     print(f"   Response: {response.text}")
