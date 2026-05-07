@@ -48,14 +48,16 @@ class Config:
     LOOKBACK_WINDOW = 24   # 24 steps = 2 hours of history
     FORECAST_HORIZON = 12  # 12 steps = 1 hour ahead
     
-    # Features: [speed, precipitation_mm, wind_speed_kmh, hour_sin, hour_cos, day_of_week]
+    # Features: [speed, precipitation_mm, wind_speed_kmh,
+    #            hour_sin, hour_cos, day_sin, day_cos,
+    #            week_sin, week_cos, month_sin, month_cos]
     # Temporal features are automatically extracted from timestamps
     TARGET_COL = 'speed'
     
     # Model architecture - now includes temporal features
-    # Model architecture - now includes temporal features
-    # Features: speed + weather (2) + temporal (6) = 9 features
-    INPUT_DIM = 9         # [speed, precip, wind, hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos]
+    # Features: speed + weather (2) + temporal (8) = 11 total
+    # Temporal components: hour (2), day (2), week (2), month (2)
+    INPUT_DIM = 11
     D_MODEL = 64         # Reduced hidden dimension for faster CPU training
     NUM_MAMBA_LAYERS = 2  # Number of Mamba layers
     DROPOUT = 0.1
@@ -94,21 +96,22 @@ if torch.cuda.is_available():
 def extract_temporal_features(df):
     """
     Automatically extract temporal patterns from timestamps:
-    - Hour cyclical encoding (sin/cos for 24-hour cycle)
-    - Day of week encoding
-    - Month encoding
+    - Hour cyclical encoding (24-hour cycle)
+    - Day of week (7-day cycle)
+    - Week of year (52-week cycle) ← NEW!
+    - Month (12-month cycle)
     
     This allows the model to LEARN patterns like:
-    - Morning rush (7-9 AM)
-    - Evening rush (4-7 PM)
-    - Weekday vs weekend patterns
-    - Monthly patterns
+    - Rush hours (hourly)
+    - Weekdays vs weekends (daily)
+    - Seasonal patterns (weekly/monthly)
+    - Yearly patterns (monthly)
     
-    The model will discover these patterns from the data, not predefined!
+    The model will discover these patterns from the data!
     """
-    # Extract temporal components
     hours = df.index.hour
     days = df.index.dayofweek
+    weeks = df.index.isocalendar().week  # Week of year (1-52)
     months = df.index.month
     
     # Cyclical encoding for hours (24-hour cycle)
@@ -119,11 +122,15 @@ def extract_temporal_features(df):
     day_sin = np.sin(2 * np.pi * days / 7)
     day_cos = np.cos(2 * np.pi * days / 7)
     
+    # Cyclical encoding for week of year (52-week cycle) - NEW!
+    week_sin = np.sin(2 * np.pi * weeks / 52)
+    week_cos = np.cos(2 * np.pi * weeks / 52)
+    
     # Cyclical encoding for month (12-month cycle)
     month_sin = np.sin(2 * np.pi * months / 12)
     month_cos = np.cos(2 * np.pi * months / 12)
     
-    return hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos
+    return hour_sin, hour_cos, day_sin, day_cos, week_sin, week_cos, month_sin, month_cos
 
 
 def analyze_temporal_patterns(data, df_index):
@@ -138,18 +145,34 @@ def analyze_temporal_patterns(data, df_index):
     max_hour = hourly_mean.idxmax()
     min_hour = hourly_mean.idxmin()
     
-    # Weekly pattern
+    # Daily pattern (day of week)
     daily_mean = data.groupby(df_index.dayofweek)['speed'].mean()
     max_day = daily_mean.idxmax()
     min_day = daily_mean.idxmin()
     
+    # Weekly pattern (week of year) - NEW!
+    weekly_mean = data.groupby(df_index.isocalendar().week)['speed'].mean()
+    max_week = weekly_mean.idxmax()
+    min_week = weekly_mean.idxmin()
+    
+    # Monthly pattern
+    monthly_mean = data.groupby(df_index.month)['speed'].mean()
+    max_month = monthly_mean.idxmax()
+    min_month = monthly_mean.idxmin()
+    
     day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     
     print(f"    - Peak traffic hour: {max_hour}:00 ({hourly_mean[max_hour]:.1f} mph avg)")
     print(f"    - Lowest traffic hour: {min_hour}:00 ({hourly_mean[min_hour]:.1f} mph avg)")
     print(f"    - Busiest day: {day_names[max_day]} ({daily_mean[max_day]:.1f} mph avg)")
     print(f"    - Quietest day: {day_names[min_day]} ({daily_mean[min_day]:.1f} mph avg)")
-    print("    - Model will learn these patterns automatically from temporal features!")
+    print(f"    - Busiest week of year: Week {max_week} ({weekly_mean[max_week]:.1f} mph avg)")
+    print(f"    - Quietest week of year: Week {min_week} ({weekly_mean[min_week]:.1f} mph avg)")
+    print(f"    - Busiest month: {month_names[max_month-1]} ({monthly_mean[max_month]:.1f} mph avg)")
+    print(f"    - Quietest month: {month_names[min_month-1]} ({monthly_mean[min_month]:.1f} mph avg)")
+    print("    - Model will learn ALL these patterns automatically!")
+    print("    - Temporal features: hour_sin/cos, day_sin/cos, week_sin/cos, month_sin/cos")
 
 
 # ============================================================================
@@ -271,8 +294,22 @@ def load_and_preprocess_data():
     print(f"    - Selected speed column: {speed_col}")
     print(f"    - Weather columns: {weather_cols}")
     
+    # Extract speed and weather data
+    speed_data = df[speed_col].values
+    precip_col = [c for c in weather_cols if 'precip' in c.lower()]
+    wind_col = [c for c in weather_cols if 'wind' in c.lower()]
+    precip_data = df[precip_col[0]].values if precip_col else np.zeros(len(df))
+    wind_data = df[wind_col[0]].values if wind_col else np.zeros(len(df))
+    
+    # Extract speed and weather data
+    speed_data = df[speed_col].values
+    precip_col = [c for c in weather_cols if 'precip' in c.lower()]
+    wind_col = [c for c in weather_cols if 'wind' in c.lower()]
+    precip_data = df[precip_col[0]].values if precip_col else np.zeros(len(df))
+    wind_data = df[wind_col[0]].values if wind_col else np.zeros(len(df))
+    
     # Extract temporal features automatically from timestamps
-    hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos = extract_temporal_features(df)
+    hour_sin, hour_cos, day_sin, day_cos, week_sin, week_cos, month_sin, month_cos = extract_temporal_features(df)
     
     # Create DataFrame with ALL features: traffic + weather + temporal
     data = pd.DataFrame({
@@ -283,6 +320,8 @@ def load_and_preprocess_data():
         'hour_cos': hour_cos,
         'day_sin': day_sin,
         'day_cos': day_cos,
+        'week_sin': week_sin,
+        'week_cos': week_cos,
         'month_sin': month_sin,
         'month_cos': month_cos,
     }, index=df.index)
@@ -296,8 +335,12 @@ def load_and_preprocess_data():
     print(f"    - Speed range: {data['speed'].min():.2f} - {data['speed'].max():.2f} mph")
     print(f"    - Precipitation range: {data['precipitation_mm'].min():.2f} - {data['precipitation_mm'].max():.2f} mm")
     print(f"    - Wind speed range: {data['wind_speed_kmh'].min():.2f} - {data['wind_speed_kmh'].max():.2f} km/h")
-    print(f"    - Temporal features: hour_sin/cos, day_sin/cos, month_sin/cos (cyclical encoding)")
-    print(f"    - Model will LEARN patterns like rush hours from temporal features!")
+    print(f"    - Temporal features (11 total):")
+    print(f"      * Hourly (sin/cos): hour_sin, hour_cos")
+    print(f"      * Daily (sin/cos): day_sin, day_cos")
+    print(f"      * Weekly (sin/cos): week_sin, week_cos")
+    print(f"      * Monthly (sin/cos): month_sin, month_cos")
+    print(f"    - Model will LEARN all temporal patterns automatically!")
     
     return data
 

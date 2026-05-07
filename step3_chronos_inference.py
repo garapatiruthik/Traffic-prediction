@@ -66,14 +66,7 @@ except FileNotFoundError:
 # 3.3 Install/Import Chronos
 # ============================================================================
 print("\n[3.3] Loading Chronos-2 model...")
-
-try:
-    # Try the correct import
-    from chronos import ChronosPipeline
-except ImportError:
-    print("   Installing chronos-forecasting package...")
-    os.system("pip install chronos-forecasting -q")
-    from chronos import ChronosPipeline
+from chronos import ChronosPipeline
 
 # Load the Chronos-2 model
 print(f"   Loading {MODEL_NAME}...")

@@ -1,0 +1,6 @@
+Metric,May_2012,June_2012
+MAE (mph),4.16,4.40
+RMSE (mph),8.10,8.24
+Mean Actual Speed,61.28,61.25
+Mean Predicted Speed,62.24,61.52
+Difference,0.96,0.27
