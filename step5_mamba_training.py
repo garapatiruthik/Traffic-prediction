@@ -431,7 +431,7 @@ class MambaForecaster(nn.Module):
         if MAMBA_AVAILABLE:
             from mamba_ssm import Mamba as MambaBlock
             self.layers = nn.ModuleList([
-                MambaBlock(d_model=d_model, dropout=dropout)
+                MambaBlock(d_model=d_model)  # Removed dropout param - not supported by mamba_ssm
                 for _ in range(num_layers)
             ])
             print(f"Using {num_layers} Mamba layers")

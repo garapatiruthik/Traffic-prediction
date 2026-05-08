@@ -139,27 +139,39 @@ print(f"   Available months: {months_available}")
 
 # We'll do: Train on Mar+Apr -> Predict May
 # Then: Train on Mar+Apr+May -> Predict June
+# And: Predict May 2013 from 2012 training data
 
 # Split by actual dates
-split_date_1 = pd.Timestamp('2012-05-01')  # Predict May
-split_date_2 = pd.Timestamp('2012-06-01')  # Predict June
-split_date_3 = pd.Timestamp('2013-06-01')  # Predict June 2013
+split_date_1 = pd.Timestamp('2012-05-01')  # Predict May 2012
+split_date_2 = pd.Timestamp('2012-06-01')  # Predict June 2012
+split_date_3 = pd.Timestamp('2013-05-01')  # Predict May 2013
 
-# Split 1: Train = before May, Test = May
+# Split 1: Train = before May 2012, Test = May 2012
 train_data_1 = data[data.index < split_date_1]
 test_data_1 = data[(data.index >= split_date_1) & (data.index < split_date_2)]
 
-# Split 2: Train = ALL 2012 data, Predict June 2013 (no actual data available)
-train_data_2 = data.copy()  # All available training data
-test_data_2 = data[data.index >= split_date_2]  # Placeholder for window creation
+# Split 2: Train = ALL 2012 data, Predict May 2013 (no actual 2013 data, using May 2012 as proxy)
+train_data_2 = data[data.index < split_date_3]
+may_2012_data = data[(data.index.month == 5) & (data.index.year == 2012)]
+test_data_2 = may_2012_data.copy()  # Use May 2012 pattern for May 2013 prediction
 
-print(f"\n   Split 1 (Predict May):")
+# Split 3: Train = ALL 2012 data, Predict June 2013 (using June 2012 as proxy)
+train_data_3 = data.copy()
+june_2012_data = data[(data.index.month == 6) & (data.index.year == 2012)]
+test_data_3 = june_2012_data.copy()  # Use June 2012 pattern for June 2013 prediction
+
+# Print splits
+print(f"\n   Split 1 (Predict May 2012):")
 print(f"      Train: {train_data_1.index.min()} to {train_data_1.index.max()} ({len(train_data_1)} rows)")
 print(f"      Test:  {test_data_1.index.min()} to {test_data_1.index.max()} ({len(test_data_1)} rows)")
 
-print(f"\n   Split 2 (Predict June):")
+print(f"\n   Split 2 (Predict May 2013):")
 print(f"      Train: {train_data_2.index.min()} to {train_data_2.index.max()} ({len(train_data_2)} rows)")
-print(f"      Test:  {test_data_2.index.min()} to {test_data_2.index.max()} ({len(test_data_2)} rows)")
+print(f"      Test:  {test_data_2.index.min()} to {test_data_2.index.max()} ({len(test_data_2)} rows) [May 2012 proxy]")
+
+print(f"\n   Split 3 (Predict June 2013):")
+print(f"      Train: {train_data_3.index.min()} to {train_data_3.index.max()} ({len(train_data_3)} rows)")
+print(f"      Test:  {test_data_3.index.min()} to {test_data_3.index.max()} ({len(test_data_3)} rows) [June 2012 proxy]")
 
 # =============================================================================
 # Create sliding windows for each split
@@ -184,22 +196,24 @@ X_test1, y_test1 = create_windows(test_data_1)
 X_train2, y_train2 = create_windows(train_data_2)
 X_test2, y_test2 = create_windows(test_data_2)
 
+X_train3, y_train3 = create_windows(train_data_3)
+X_test3, y_test3 = create_windows(test_data_3)
+
 print(f"\n[3] Window creation:")
-print(f"   Split 1: X_train={X_train1.shape}, X_test={X_test1.shape}")
-print(f"   Split 2: X_train={X_train2.shape}, X_test={X_test2.shape}")
+print(f"   Split 1 (May2012): X_train={X_train1.shape}, X_test={X_test1.shape}")
+print(f"   Split 2 (May2013): X_train={X_train2.shape}, X_test={X_test2.shape}")
+print(f"   Split 3 (June2013): X_train={X_train3.shape}, X_test={X_test3.shape}")
 
 # Fit scaler on TRAIN data only (prevent leakage!)
 scaler = StandardScaler()
-scaler.fit(train_data_2.values)  # Use full training data (all before test)
+scaler.fit(train_data_2.values)  # Use training data for May 2013 prediction
 
 # Apply scaler to all splits
 def scale_data(X, y, scaler):
-    # Scale X from all features
     X_shape = X.shape
     X_flat = X.reshape(-1, X.shape[-1])
     X_scaled = scaler.transform(X_flat).reshape(X_shape)
     
-    # Scale y using speed column's scaler parameters
     speed_mean = scaler.mean_[0]
     speed_std = scaler.scale_[0]
     y_scaled = (y - speed_mean) / speed_std
@@ -210,6 +224,8 @@ X_train1_s, y_train1_s, _, _ = scale_data(X_train1, y_train1, scaler)
 X_test1_s, y_test1_s, speed_mean, speed_std = scale_data(X_test1, y_test1, scaler)
 X_train2_s, y_train2_s, _, _ = scale_data(X_train2, y_train2, scaler)
 X_test2_s, y_test2_s, _, _ = scale_data(X_test2, y_test2, scaler)
+X_train3_s, y_train3_s, _, _ = scale_data(X_train3, y_train3, scaler)
+X_test3_s, y_test3_s, _, _ = scale_data(X_test3, y_test3, scaler)
 
 # =============================================================================
 # PyTorch Dataset
@@ -223,12 +239,15 @@ class TrafficDataset(Dataset):
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx]
 
-# Create datasets for both splits
+# Create datasets for three splits
 train_dataset1 = TrafficDataset(X_train1_s, y_train1_s)
 test_dataset1 = TrafficDataset(X_test1_s, y_test1_s)
 
 train_dataset2 = TrafficDataset(X_train2_s, y_train2_s)
 test_dataset2 = TrafficDataset(X_test2_s, y_test2_s)
+
+train_dataset3 = TrafficDataset(X_train3_s, y_train3_s)
+test_dataset3 = TrafficDataset(X_test3_s, y_test3_s)
 
 train_loader1 = DataLoader(train_dataset1, batch_size=config.BATCH_SIZE, shuffle=True)
 test_loader1 = DataLoader(test_dataset1, batch_size=config.BATCH_SIZE, shuffle=False)
@@ -236,10 +255,15 @@ test_loader1 = DataLoader(test_dataset1, batch_size=config.BATCH_SIZE, shuffle=F
 train_loader2 = DataLoader(train_dataset2, batch_size=config.BATCH_SIZE, shuffle=True)
 test_loader2 = DataLoader(test_dataset2, batch_size=config.BATCH_SIZE, shuffle=False)
 
-print(f"   Train batches (Split1): {len(train_loader1)}")
-print(f"   Test batches  (Split1): {len(test_loader1)}")
-print(f"   Train batches (Split2): {len(train_loader2)}")
-print(f"   Test batches  (Split2): {len(test_loader2)}")
+train_loader3 = DataLoader(train_dataset3, batch_size=config.BATCH_SIZE, shuffle=True)
+test_loader3 = DataLoader(test_dataset3, batch_size=config.BATCH_SIZE, shuffle=False)
+
+print(f"   Train batches (Split1 - May2012): {len(train_loader1)}")
+print(f"   Test batches  (Split1 - May2012): {len(test_loader1)}")
+print(f"   Train batches (Split2 - May2013): {len(train_loader2)}")
+print(f"   Test batches  (Split2 - May2013): {len(test_loader2)}")
+print(f"   Train batches (Split3 - June2013): {len(train_loader3)}")
+print(f"   Test batches  (Split3 - June2013): {len(test_loader3)}")
 
 # =============================================================================
 # Mamba Model Definition
@@ -259,7 +283,7 @@ class MambaForecaster(nn.Module):
         if MAMBA_AVAILABLE:
             from mamba_ssm import Mamba as MambaBlock
             self.layers = nn.ModuleList([
-                MambaBlock(d_model=d_model, dropout=dropout)
+                MambaBlock(d_model=d_model)  # Removed dropout param - not supported
                 for _ in range(num_layers)
             ])
             print(f"   Using {num_layers} Mamba layers")
@@ -404,10 +428,10 @@ for epoch in range(config.EPOCHS):
 
 mae1, rmse1, may_pred_mean, may_pred_std, may_actual = evaluate(model1, test_loader1, device, scaler)
 print(f"   May 2012 - MAE: {mae1:.2f} mph, RMSE: {rmse1:.2f} mph")
-results['May'] = {'mae': mae1, 'rmse': rmse1, 'predictions': may_pred_mean, 'actual': may_actual}
+results['May2012'] = {'mae': mae1, 'rmse': rmse1, 'predictions': may_pred_mean, 'actual': may_actual}
 
-# =================== EXPERIMENT 2: Predict June 2013 ===================
-print("\n   EXPERIMENT 2: Train on ALL 2012 data -> Predict June 2013")
+# =================== EXPERIMENT 2: Predict May 2013 ===================
+print("\n   EXPERIMENT 2: Train on ALL 2012 data -> Predict May 2013")
 print("   " + "-"*50)
 
 model2 = MambaForecaster(input_dim=config.INPUT_DIM, d_model=config.D_MODEL,
@@ -421,19 +445,46 @@ for epoch in range(config.EPOCHS):
     if (epoch+1) % 5 == 0:
         print(f"      Epoch {epoch+1}/{config.EPOCHS}: Loss={loss:.4f}")
 
-# Generate June 2013 predictions (no actual data available)
+# Generate May 2013 predictions (using May 2012 as proxy)
 model2.eval()
 with torch.no_grad():
     X_test2_tensor = torch.tensor(X_test2_s, dtype=torch.float32).to(device)
     mean, log_std = model2(X_test2_tensor)
     speed_mean = scaler.mean_[0]
     speed_std = scaler.scale_[0]
-    jun_pred_mean = mean.cpu().numpy() * speed_std + speed_mean
-    jun_pred_std = torch.exp(log_std).cpu().numpy() * speed_std
-    jun_actual = y_test2 * speed_std + speed_mean  # These are from June 2012 for comparison
+    may2013_pred_mean = mean.cpu().numpy() * speed_std + speed_mean
+    may2013_pred_std = torch.exp(log_std).cpu().numpy() * speed_std
+    may2013_actual = y_test2  # Already unscaled - no transformation needed!
 
-print(f"   June 2013 (predicted from June 2012 pattern) - Mean: {jun_pred_mean.mean():.2f} mph, Std: {jun_pred_mean.std():.2f} mph")
-results['June2013'] = {'predictions': jun_pred_mean, 'predicted_std': jun_pred_std, 'actual': jun_actual}
+print(f"   May 2013 (predicted from 2012 model) - Mean: {may2013_pred_mean.mean():.2f} mph")
+results['May2013'] = {'predictions': may2013_pred_mean, 'predicted_std': may2013_pred_std, 'actual': may2013_actual}
+
+# =================== EXPERIMENT 3: Predict June 2013 ===================
+print("\n   EXPERIMENT 3: Train on ALL 2012 data -> Predict June 2013")
+print("   " + "-"*50)
+
+model3 = MambaForecaster(input_dim=config.INPUT_DIM, d_model=config.D_MODEL,
+                        horizon=config.FORECAST_HORIZON, num_layers=config.NUM_MAMBA_LAYERS,
+                        dropout=config.DROPOUT).to(device)
+
+optimizer3 = torch.optim.AdamW(model3.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
+
+for epoch in range(config.EPOCHS):
+    loss = train_epoch(model3, train_loader3, optimizer3, device)
+    if (epoch+1) % 5 == 0:
+        print(f"      Epoch {epoch+1}/{config.EPOCHS}: Loss={loss:.4f}")
+
+# Generate June 2013 predictions (using June 2012 as proxy)
+model3.eval()
+with torch.no_grad():
+    X_test3_tensor = torch.tensor(X_test3_s, dtype=torch.float32).to(device)
+    mean, log_std = model3(X_test3_tensor)
+    jun2013_pred_mean = mean.cpu().numpy() * speed_std + speed_mean
+    jun2013_pred_std = torch.exp(log_std).cpu().numpy() * speed_std
+    jun2013_actual = y_test3  # Already unscaled - no transformation needed!
+
+print(f"   June 2013 (predicted from 2012 model) - Mean: {jun2013_pred_mean.mean():.2f} mph")
+results['June2013'] = {'predictions': jun2013_pred_mean, 'predicted_std': jun2013_pred_std, 'actual': jun2013_actual}
 
 # =============================================================================
 # Save predictions for comparison
@@ -441,38 +492,52 @@ results['June2013'] = {'predictions': jun_pred_mean, 'predicted_std': jun_pred_s
 print("\n[5] Saving month-ahead predictions...")
 
 # Get timestamps for test periods
-may_timestamps = test_data_1.index[-len(y_test1):][-len(may_pred_mean):]
-jun_timestamps = test_data_2.index[-len(y_test2):][-len(jun_pred_mean):]
+may2012_timestamps = test_data_1.index[-len(y_test1):][-len(may_pred_mean):]
+may2013_timestamps = test_data_2.index[-len(y_test2):][-len(may2013_pred_mean):]
+june2013_timestamps = test_data_3.index[-len(y_test3):][-len(jun2013_pred_mean):]
 
-# May predictions
-may_df = pd.DataFrame({
-    'timestamp': may_timestamps[:len(may_pred_mean)],
-    'actual': may_actual.mean(axis=1),  # Average across horizon if needed
+# May 2012 predictions
+may2012_df = pd.DataFrame({
+    'timestamp': may2012_timestamps[:len(may_pred_mean)],
+    'actual': may_actual.mean(axis=1),
     'predicted_mean': may_pred_mean.mean(axis=1),
     'predicted_std': may_pred_std.mean(axis=1),
 })
-may_df.to_csv('mamba_predictions_may2012.csv', index=False)
-print(f"   Saved: mamba_predictions_may2012.csv ({len(may_df)} rows)")
+may2012_df.to_csv('mamba_predictions_may2012.csv', index=False)
+print(f"   Saved: mamba_predictions_may2012.csv ({len(may2012_df)} rows)")
 
-# June 2013 predictions (predicted from model trained on 2012 data)
-jun_df = pd.DataFrame({
-    'timestamp': jun_timestamps[:len(jun_pred_mean)],
-    'actual': jun_actual.mean(axis=1),  # June 2012 actual for reference
-    'predicted_mean': jun_pred_mean.mean(axis=1),
-    'predicted_std': jun_pred_std.mean(axis=1),
+# May 2013 predictions (predicted from 2012 model)
+may2013_df = pd.DataFrame({
+    'timestamp': may2013_timestamps[:len(may2013_pred_mean)],
+    'actual': may2013_actual.mean(axis=1),  # May 2012 actual for reference
+    'predicted_mean': may2013_pred_mean.mean(axis=1),
+    'predicted_std': may2013_pred_std.mean(axis=1),
 })
-jun_df.to_csv('mamba_predictions_jun2013.csv', index=False)
-print(f"   Saved: mamba_predictions_jun2013.csv ({len(jun_df)} rows)")
+may2013_df.to_csv('mamba_predictions_may2013.csv', index=False)
+print(f"   Saved: mamba_predictions_may2013.csv ({len(may2013_df)} rows)")
+
+# June 2013 predictions
+jun2013_df = pd.DataFrame({
+    'timestamp': june2013_timestamps[:len(jun2013_pred_mean)],
+    'actual': jun2013_actual.mean(axis=1),  # June 2012 actual for reference
+    'predicted_mean': jun2013_pred_mean.mean(axis=1),
+    'predicted_std': jun2013_pred_std.mean(axis=1),
+})
+jun2013_df.to_csv('mamba_predictions_jun2013.csv', index=False)
+print(f"   Saved: mamba_predictions_jun2013.csv ({len(jun2013_df)} rows)")
 
 # Combined comparison
 comparison_df = pd.DataFrame({
     'Metric': ['MAE (mph)', 'RMSE (mph)', 'Mean Actual Speed', 'Mean Predicted Speed', 'Difference'],
-    'May_2012': [f"{mae1:.2f}", f"{rmse1:.2f}", 
+    'May_2012': [f"{mae1:.2f}", f"{rmse1:.2f}",
                  f"{may_actual.mean():.2f}", f"{may_pred_mean.mean():.2f}",
                  f"{(may_pred_mean.mean()-may_actual.mean()):.2f}"],
+    'May_2013_Pred': [f"N/A", f"N/A",
+                      f"{may2013_actual.mean():.2f}", f"{may2013_pred_mean.mean():.2f}",
+                      f"{(may2013_pred_mean.mean()-may2013_actual.mean()):.2f}"],
     'June_2013_Pred': [f"N/A", f"N/A",
-                       f"{jun_actual.mean():.2f}", f"{jun_pred_mean.mean():.2f}",
-                       f"{(jun_pred_mean.mean()-jun_actual.mean()):.2f}"]
+                       f"{jun2013_actual.mean():.2f}", f"{jun2013_pred_mean.mean():.2f}",
+                       f"{(jun2013_pred_mean.mean()-jun2013_actual.mean()):.2f}"]
 })
 comparison_df.to_csv('month_ahead_comparison.csv', index=False)
 print(f"   Saved: month_ahead_comparison.csv")
@@ -481,7 +546,8 @@ print("\n" + "=" * 60)
 print("MONTH-AHEAD EXPERIMENT COMPLETE!")
 print("=" * 60)
 print("\nSummary:")
-print(f"   May 2012 MAE:  {mae1:.2f} mph")
-print(f"   June 2013 Prediction: Mean={jun_pred_mean.mean():.2f} mph, Std={jun_pred_std.mean():.2f} mph")
-print("\n   Model trained on 2012 data, predicted June 2013 speeds")
-print("   (June 2012 actual values shown for reference comparison)")
+print(f"   May 2012 MAE: {mae1:.2f} mph")
+print(f"   May 2013 Predicted: Mean={may2013_pred_mean.mean():.2f} mph")
+print(f"   June 2013 Predicted: Mean={jun2013_pred_mean.mean():.2f} mph")
+print("\n   Model trained on 2012 data, predicted May & June 2013 speeds")
+print("   (2012 actual values shown for reference comparison)")
