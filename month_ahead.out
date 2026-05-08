@@ -1,0 +1,75 @@
+============================================================
+MONTH-AHEAD FORECASTING EXPERIMENT
+============================================================
+
+[1] Loading merged dataset...
+   Full dataset: (34272, 4)
+   Date range: 2012-03-01 00:00:00 to 2012-06-27 23:55:00
+   Using sensor: traffic_speed
+   Weather cols: ['weather_temperature_celsius', 'weather_precipitation_mm', 'weather_wind_speed_kmh']
+   Feature shape: (34272, 11)
+
+[2] Creating temporal train/test splits by month...
+   Available months: [3, 4, 5, 6]
+
+   Split 1 (Predict May 2012):
+      Train: 2012-03-01 00:00:00 to 2012-04-30 23:55:00 (17568 rows)
+      Test:  2012-05-01 00:00:00 to 2012-05-31 23:55:00 (8928 rows)
+
+   Split 2 (Predict May 2013):
+      Train: 2012-03-01 00:00:00 to 2012-06-27 23:55:00 (34272 rows)
+      Test:  2012-05-01 00:00:00 to 2012-05-31 23:55:00 (8928 rows) [May 2012 proxy]
+
+   Split 3 (Predict June 2013):
+      Train: 2012-03-01 00:00:00 to 2012-06-27 23:55:00 (34272 rows)
+      Test:  2012-06-01 00:00:00 to 2012-06-27 23:55:00 (7776 rows) [June 2012 proxy]
+
+[3] Window creation:
+   Split 1 (May2012): X_train=(17533, 24, 11), X_test=(8893, 24, 11)
+   Split 2 (May2013): X_train=(34237, 24, 11), X_test=(8893, 24, 11)
+   Split 3 (June2013): X_train=(34237, 24, 11), X_test=(7741, 24, 11)
+   Train batches (Split1 - May2012): 274
+   Test batches  (Split1 - May2012): 139
+   Train batches (Split2 - May2013): 535
+   Test batches  (Split2 - May2013): 139
+   Train batches (Split3 - June2013): 535
+   Test batches  (Split3 - June2013): 121
+
+[4] Running Month-Ahead Forecasting Experiments...
+   Device: cpu
+
+   EXPERIMENT 1: Train on Mar-Apr -> Predict May 2012
+   --------------------------------------------------
+   Using 2 FFN layers (State Space fallback)
+      Epoch 5/5: Loss=0.3527
+   May 2012 - MAE: 4.27 mph, RMSE: 8.33 mph
+
+   EXPERIMENT 2: Train on ALL 2012 data -> Predict May 2013
+   --------------------------------------------------
+   Using 2 FFN layers (State Space fallback)
+      Epoch 5/5: Loss=0.2969
+   May 2013 (predicted from 2012 model) - Mean: 61.84 mph
+
+   EXPERIMENT 3: Train on ALL 2012 data -> Predict June 2013
+   --------------------------------------------------
+   Using 2 FFN layers (State Space fallback)
+      Epoch 5/5: Loss=0.2971
+   June 2013 (predicted from 2012 model) - Mean: 61.42 mph
+
+[5] Saving month-ahead predictions...
+   Saved: mamba_predictions_may2012.csv (8893 rows)
+   Saved: mamba_predictions_may2013.csv (8893 rows)
+   Saved: mamba_predictions_jun2013.csv (7741 rows)
+   Saved: month_ahead_comparison.csv
+
+============================================================
+MONTH-AHEAD EXPERIMENT COMPLETE!
+============================================================
+
+Summary:
+   May 2012 MAE: 4.27 mph
+   May 2013 Predicted: Mean=61.84 mph
+   June 2013 Predicted: Mean=61.42 mph
+
+   Model trained on 2012 data, predicted May & June 2013 speeds
+   (2012 actual values shown for reference comparison)

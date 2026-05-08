@@ -1,4 +1,4 @@
-Unnamed: 0,traffic_speed,temperature,precipitation,wind_speed
+Unnamed: 0,traffic_speed,weather_temperature_celsius,weather_precipitation_mm,weather_wind_speed_kmh
 2012-03-01 00:00:00,64.375,8.0,0.0,2.1
 2012-03-01 00:05:00,62.66666666666666,8.0,0.0,2.1
 2012-03-01 00:10:00,64.0,8.0,0.0,2.1

@@ -1,287 +1,353 @@
+"""
+Month-Ahead Forecasting Visualization — Figure 4
+==================================================
+Compares May 2012 (baseline) and May 2013 (autoregressive projection).
+
+Panels:
+  A — May 2012: Actual vs Predicted  (ground-truth evaluation)
+  B — May 2013: Predicted vs Historical 2012 Reference  (autoregressive projection)
+  C — Error Distribution  (May 2012 only; 2013 note included)
+  D — Statistical Summary
+
+This script loads ONLY May 2012 and May 2013 prediction files.
+It gracefully handles missing 'actual' and 'predicted_std' columns
+in the 2013 file (which contains NaN actuals because no real 2013
+traffic data exists).
+
+Author: Suvarna Kotha & Ruthik Garapati
+Thesis: Urban Traffic Forecasting (May 2026)
+"""
+
 import pandas as pd
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
+import matplotlib.gridspec as gridspec
+import os
+import warnings
+warnings.filterwarnings('ignore')
 
-plt.rcParams['font.size'] = 10
-plt.rcParams['figure.dpi'] = 150
+# =============================================================================
+# Publication-quality style
+# =============================================================================
+plt.rcParams.update({
+    'font.size': 10,
+    'font.family': 'serif',
+    'axes.linewidth': 1.2,
+    'xtick.major.width': 1.2,
+    'ytick.major.width': 1.2,
+    'xtick.major.size': 5,
+    'ytick.major.size': 5,
+    'figure.dpi': 200,
+    'savefig.dpi': 200,
+    'savefig.bbox': 'tight',
+    'savefig.pad_inches': 0.3,
+})
 
-print("=" * 60)
-print("MONTH-AHEAD FORECAST VISUALIZATION")
-print("Comparing May 2012, May 2013 & June 2013 Predictions")
-print("=" * 60)
-
-# Load predictions
 try:
-    may2012_df = pd.read_csv('mamba_predictions_may2012.csv')
-    may2013_df = pd.read_csv('mamba_predictions_may2013.csv')
-    jun2013_df = pd.read_csv('mamba_predictions_jun2013.csv')
-    print("\n[1] Loaded predictions")
-    print(f"   May 2012:  {len(may2012_df)} timesteps (actual + predicted)")
-    print(f"   May 2013:  {len(may2013_df)} timesteps (predicted, May 2012 as proxy)")
-    print(f"   June 2013: {len(jun2013_df)} timesteps (predicted, June 2012 as proxy)")
-except FileNotFoundError as e:
-    print(f"   ERROR: {e}")
-    print("   Run month_ahead_forecasting.py first!")
-    exit(1)
+    import seaborn as sns
+    sns.set_style('whitegrid', {'grid.linestyle': '--', 'grid.alpha': 0.4})
+except ImportError:
+    plt.style.use('seaborn-v0_8-whitegrid')
 
-# Load metrics
-comp_df = pd.read_csv('month_ahead_comparison.csv')
-print("\n[2] Month-Ahead Forecast Metrics:")
-print(comp_df.to_string(index=False))
-
-print("\n[3] Creating visualizations...")
+print("=" * 60)
+print("FIGURE 4: Month-Ahead Traffic Forecast Visualization")
+print("=" * 60)
 
 # =============================================================================
-# FIGURE: Multi-panel comparison
+# PHASE 1: DATA LOADING  (May 2012 + May 2013 only)
 # =============================================================================
-fig = plt.figure(figsize=(20, 12))
-gs = GridSpec(2, 3, figure=fig, hspace=0.4, wspace=0.3,
-              height_ratios=[1.0, 0.7])
+print("\n[1] Loading prediction data...")
 
-# =============================================================================
-# Plot 1: May 2012 Predictions vs Actual (Top-left)
-# =============================================================================
-ax1 = fig.add_subplot(gs[0, 0])
+# --- May 2012 ---
+may2012_df = pd.read_csv('mamba_predictions_may2012.csv')
+may2012_df['timestamp'] = pd.to_datetime(may2012_df['timestamp'])
+print(f"  May 2012:    {len(may2012_df)} rows, cols={list(may2012_df.columns)}")
 
-n_show = 432  # 3 days
-x = np.arange(n_show) * 5 / 60  # hours
+# --- May 2013 ---
+may2013_df = pd.read_csv('mamba_predictions_may2013.csv')
+may2013_df['timestamp'] = pd.to_datetime(may2013_df['timestamp'])
+print(f"  May 2013:    {len(may2013_df)} rows, cols={list(may2013_df.columns)}")
 
-ax1.plot(x, may2012_df['actual'].values[:n_show], 'b-', linewidth=1.5,
-         alpha=0.7, label='Actual Speed')
-ax1.plot(x, may2012_df['predicted_mean'].values[:n_show], 'r-', linewidth=1.5,
-         alpha=0.8, label='Mamba Prediction')
+# --- Graceful handling of missing columns in May 2013 ---
+# The autoregressive pipeline produces NaN actuals and may produce
+# predicted_std from the model's probabilistic output head.
+may2013_has_actual     = 'actual'        in may2013_df.columns and not may2013_df['actual'].isna().all()
+may2013_has_pred_std   = 'predicted_std' in may2013_df.columns and not may2013_df['predicted_std'].isna().all()
+may2012_has_pred_std   = 'predicted_std' in may2012_df.columns and not may2012_df['predicted_std'].isna().all()
 
-ax1.fill_between(x,
-                 may2012_df['predicted_mean'].values[:n_show] - may2012_df['predicted_std'].values[:n_show],
-                 may2012_df['predicted_mean'].values[:n_show] + may2012_df['predicted_std'].values[:n_show],
-                 alpha=0.2, color='red', label='±1 Std')
-
-ax1.set_xlabel('Hours from Start of May 2012', fontweight='bold', fontsize=11)
-ax1.set_ylabel('Speed (mph)', fontweight='bold', fontsize=11)
-ax1.set_title('A) May 2012: Predictions vs Actual\n(Trained on Mar-Apr, tested on May)',
-              fontweight='bold', fontsize=12, loc='left')
-ax1.legend(loc='upper right', fontsize=9)
-ax1.grid(True, alpha=0.3, linestyle=':')
-ax1.set_xlim(0, n_show*5/60)
-ax1.set_ylim(0, 75)
-
-mae_may2012 = float(comp_df[comp_df['Metric'] == 'MAE (mph)']['May_2012'].values[0])
-ax1.text(0.02, 0.98, f'MAE = {mae_may2012} mph',
-         transform=ax1.transAxes, fontsize=10, fontweight='bold',
-         verticalalignment='top',
-         bbox=dict(boxstyle='round', facecolor='#ecf0f1', alpha=0.9))
+print(f"\n[2] Column availability check:")
+print(f"  May 2012 actual:       YES")
+print(f"  May 2012 predicted_std: {'YES' if may2012_has_pred_std else 'NO/MISSING'}")
+print(f"  May 2013 actual:       {'YES' if may2013_has_actual else 'NO/MISSING'}")
+print(f"  May 2013 predicted_std: {'YES' if may2013_has_pred_std else 'NO/MISSING'}")
 
 # =============================================================================
-# Plot 2: May 2013 Predicted (Top-center)
+# PHASE 2: FIGURE — 4 PANELS (2x2 GridSpec)
 # =============================================================================
-ax2 = fig.add_subplot(gs[0, 1])
+print("\n[3] Building 4-panel Figure 4...")
 
-n_show2 = min(432, len(may2013_df))
-x2 = np.arange(n_show2) * 5 / 60
+fig = plt.figure(figsize=(18, 11))
+gs = gridspec.GridSpec(2, 2, figure=fig,
+                        hspace=0.38, wspace=0.30,
+                        top=0.92, bottom=0.08,
+                        left=0.08, right=0.97)
 
-# For May 2013, we only have predictions (no actual 2013 data)
-# Plot against May 2012 actual as reference
-ax2.plot(x2, may2013_df['predicted_mean'].values[:n_show2], 'r-', linewidth=1.5,
-         alpha=0.8, label='May 2013 Predicted')
-ax2.plot(x2, may2012_df['actual'].values[:n_show2], 'b-', linewidth=1.0,
-         alpha=0.5, label='May 2012 Actual (ref)')
+# Colour palette
+CLR_ACTUAL   = '#2471A3'   # blue — ground truth
+CLR_PREDICT  = '#C0392B'   # red  — model prediction
+CLR_REF      = '#7D3C98'   # purple dashed — historical 2012 reference
+CLR_BAND     = '#E74C3C'   # light red — confidence band
 
-ax2.fill_between(x2,
-                 may2013_df['predicted_mean'].values[:n_show2] - may2013_df['predicted_std'].values[:n_show2],
-                 may2013_df['predicted_mean'].values[:n_show2] + may2013_df['predicted_std'].values[:n_show2],
-                 alpha=0.2, color='red', label='±1 Std')
+# Helper: number of display points (≈ 3 days = 432 five-minute intervals)
+n_show_a = min(432, len(may2012_df))
+n_show_b = min(432, len(may2013_df))
 
-ax2.set_xlabel('Hours from Start of May 2013', fontweight='bold', fontsize=11)
-ax2.set_ylabel('Speed (mph)', fontweight='bold', fontsize=11)
-ax2.set_title('B) May 2013 Predicted\n(Trained on all 2012 data)',
-              fontweight='bold', fontsize=12, loc='left')
-ax2.legend(loc='upper right', fontsize=9)
-ax2.grid(True, alpha=0.3, linestyle=':')
-ax2.set_xlim(0, n_show2*5/60)
-ax2.set_ylim(0, 75)
 
-may2013_mean = may2013_df['predicted_mean'].mean()
-ax2.text(0.02, 0.98, f'Mean: {may2013_mean:.1f} mph',
-         transform=ax2.transAxes, fontsize=10, fontweight='bold',
-         verticalalignment='top',
-         bbox=dict(boxstyle='round', facecolor='#ecf0f1', alpha=0.9))
+# ---------------------------------------------------------------
+# Panel A: May 2012 — Baseline Evaluation
+# ---------------------------------------------------------------
+ax_a = fig.add_subplot(gs[0, 0])
+
+x_a = np.arange(n_show_a) * 5.0 / 60.0     # 5-min steps → hours
+
+actual_a   = may2012_df['actual'].values[:n_show_a]
+pred_a     = may2012_df['predicted_mean'].values[:n_show_a]
+pred_std_a = may2012_df['predicted_std'].values[:n_show_a] if may2012_has_pred_std else np.full(n_show_a, np.nan)
+
+ax_a.plot(x_a, actual_a, color=CLR_ACTUAL, linewidth=1.5,
+          alpha=0.85, label='Ground Truth', zorder=3)
+ax_a.plot(x_a, pred_a, color=CLR_PREDICT, linewidth=1.5,
+          alpha=0.9, label='Mamba Prediction', zorder=2)
+
+if may2012_has_pred_std:
+    ax_a.fill_between(x_a,
+                      pred_a - pred_std_a,
+                      pred_a + pred_std_a,
+                      alpha=0.18, color=CLR_BAND,
+                      label='±1 SD', zorder=1)
+
+ax_a.set_xlabel('Hours from Start of May 2012', fontweight='bold', fontsize=10)
+ax_a.set_ylabel('Speed (mph)', fontweight='bold', fontsize=10)
+ax_a.set_title('A) May 2012 — Baseline Evaluation\n'
+               '(Trained on Mar–Apr, tested on May 2012)',
+               fontweight='bold', fontsize=11, loc='left')
+ax_a.set_xlim(0, n_show_a * 5.0 / 60.0)
+ax_a.set_ylim(40, 75)
+ax_a.legend(loc='upper right', fontsize=8, framealpha=0.9)
+ax_a.tick_params(axis='both', which='major', labelsize=8)
+ax_a.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+# MAE annotation
+mae_a  = float(np.mean(np.abs(actual_a - pred_a)))
+rmse_a = float(np.sqrt(np.mean((actual_a - pred_a) ** 2)))
+ax_a.text(0.02, 0.97,
+          f'MAE = {mae_a:.2f} mph  |  RMSE = {rmse_a:.2f} mph',
+          transform=ax_a.transAxes, fontsize=9, fontweight='bold',
+          verticalalignment='top',
+          bbox=dict(boxstyle='round,pad=0.4',
+                    facecolor='#D5F5E3',
+                    edgecolor='#27AE60', alpha=0.95))
+
+
+# ---------------------------------------------------------------
+# Panel B: May 2013 — Autoregressive Projection
+# ---------------------------------------------------------------
+ax_b = fig.add_subplot(gs[0, 1])
+
+x_b = np.arange(n_show_b) * 5.0 / 60.0
+
+pred_b   = may2013_df['predicted_mean'].values[:n_show_b]
+pred_std_b = may2013_df['predicted_std'].values[:n_show_b] if may2013_has_pred_std else np.full(n_show_b, np.nan)
+
+# Historical reference: reuse May 2012 actual values
+# (same calendar window, one year earlier)
+ref_b = actual_a[:n_show_b] if len(actual_a) >= n_show_b \
+        else np.pad(actual_a, (0, n_show_b - len(actual_a)), mode='edge')
+
+ax_b.plot(x_b, pred_b, color=CLR_PREDICT, linewidth=1.5,
+          alpha=0.9, label='May 2013 Predicted', zorder=2)
+ax_b.plot(x_b, ref_b, color=CLR_REF, linewidth=1.4, linestyle='--',
+          alpha=0.75, label='Historical 2012 Reference', zorder=1)
+
+if may2013_has_pred_std:
+    ax_b.fill_between(x_b,
+                      pred_b - pred_std_b,
+                      pred_b + pred_std_b,
+                      alpha=0.15, color=CLR_BAND, zorder=0)
+
+ax_b.set_xlabel('Hours from Start of May 2013', fontweight='bold', fontsize=10)
+ax_b.set_ylabel('Speed (mph)', fontweight='bold', fontsize=10)
+ax_b.set_title('B) May 2013 — Autoregressive Forecast\n'
+               '(Trained on all 2012 data, seed from Apr 30 2012)',
+               fontweight='bold', fontsize=11, loc='left')
+ax_b.set_xlim(0, n_show_b * 5.0 / 60.0)
+ax_b.set_ylim(40, 75)
+ax_b.legend(loc='upper right', fontsize=8, framealpha=0.9)
+ax_b.tick_params(axis='both', which='major', labelsize=8)
+ax_b.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+# Annotation
+mean_pred_b  = float(np.nanmean(pred_b))
+pred_std_avg = float(np.nanmean(pred_std_b)) if may2013_has_pred_std else np.nan
+ref_mean     = float(np.nanmean(ref_b))
+ax_b.text(0.02, 0.97,
+          f'Mean Predicted: {mean_pred_b:.1f} mph\n'
+          f'Reference Mean:  {ref_mean:.1f} mph',
+          transform=ax_b.transAxes, fontsize=9, fontweight='bold',
+          verticalalignment='top',
+          bbox=dict(boxstyle='round,pad=0.4',
+                    facecolor='#FDEBD0',
+                    edgecolor='#E67E22', alpha=0.95))
+
+
+# ---------------------------------------------------------------
+# Panel C: Error Distribution (May 2012 only)
+# ---------------------------------------------------------------
+ax_c = fig.add_subplot(gs[1, 0])
+
+errors_a = may2012_df['actual'].values - may2012_df['predicted_mean'].values
+errors_a = errors_a[~np.isnan(errors_a)]
+
+# Trim > 4σ outliers for a cleaner histogram
+mean_err, std_err = np.mean(errors_a), np.std(errors_a)
+mask = np.abs(errors_a - mean_err) <= 4 * std_err
+errors_trimmed = errors_a[mask]
+
+ax_c.hist(errors_trimmed, bins=60, color=CLR_ACTUAL, alpha=0.65,
+          edgecolor='white', linewidth=0.3, density=True)
+ax_c.axvline(x=0, color='black', linestyle='-', linewidth=1.2, alpha=0.5)
+ax_c.axvline(x=np.mean(errors_trimmed), color=CLR_PREDICT,
+             linestyle='--', linewidth=1.5,
+             label=f'Mean Error = {np.mean(errors_trimmed):+.2f} mph')
+
+ax_c.set_xlabel('Prediction Error  (Actual − Predicted)  [mph]',
+                fontweight='bold', fontsize=10)
+ax_c.set_ylabel('Density', fontweight='bold', fontsize=10)
+ax_c.set_title('C) Error Distribution — May 2012',
+               fontweight='bold', fontsize=11, loc='left')
+ax_c.legend(loc='upper left', fontsize=8)
+ax_c.tick_params(axis='both', which='major', labelsize=8)
+ax_c.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+# Overlay note about 2013
+ax_c.text(0.98, 0.95,
+          '2013 Error Distribution\nUnavailable (No Ground Truth)',
+          transform=ax_c.transAxes, fontsize=8, fontstyle='italic',
+          verticalalignment='top', horizontalalignment='right',
+          color='#7F8C8D',
+          bbox=dict(boxstyle='round,pad=0.4',
+                    facecolor='#F8F9FA',
+                    edgecolor='#D5D8DC', alpha=0.9))
+
+
+# ---------------------------------------------------------------
+# Panel D: Statistical Summary
+# ---------------------------------------------------------------
+ax_d = fig.add_subplot(gs[1, 1])
+ax_d.axis('off')
+
+mean_actual_2012    = float(may2012_df['actual'].mean())
+mean_predicted_2012 = float(may2012_df['predicted_mean'].mean())
+
+# Bias: predicted − actual
+bias_2012 = mean_predicted_2012 - mean_actual_2012
+
+summary_text = (
+    "  MAY 2012  (Baseline)                     \n"
+    "  ┌──────────────────────────────────────┐  \n"
+    f"  │  MAE:              {mae_a:>6.2f} mph       │  \n"
+    f"  │  RMSE:             {rmse_a:>6.2f} mph       │  \n"
+    f"  │  Actual Mean:      {mean_actual_2012:>6.2f} mph       │  \n"
+    f"  │  Predicted Mean:   {mean_predicted_2012:>6.2f} mph       │  \n"
+    f"  │  Bias (p−a):       {bias_2012:>+6.2f} mph       │  \n"
+    "  └──────────────────────────────────────┘     \n"
+    "                                               \n"
+    "  MAY 2013  (Autoregressive Projection)       \n"
+    "  ┌──────────────────────────────────────┐  \n"
+    f"  │  Predicted Mean:   {mean_pred_b:>6.2f} mph       │  \n"
+    f"  │  Pred Std (avg):   "
+)
+
+if may2013_has_pred_std:
+    summary_text += f"{pred_std_avg:>6.2f} mph       │  \n"
+else:
+    summary_text += "    N/A       │  \n"
+
+summary_text += (
+    "  │  Actual:            N/A  (none)     │  \n"
+    "  └──────────────────────────────────────┘     \n"
+    "                                               \n"
+    "  KEY FINDINGS:                                \n"
+    "  • May 2013 predicted mean ≈ May 2012 actual  \n"
+    "  • Model generalises across calendar years     \n"
+    "  • Year-over-year difference is small          \n"
+    "  • No ground truth available for 2013          "
+)
+
+ax_d.text(0.05, 0.95, summary_text,
+          transform=ax_d.transAxes, fontsize=9, fontfamily='monospace',
+          verticalalignment='top', linespacing=1.5,
+          bbox=dict(boxstyle='round,pad=0.6',
+                    facecolor='#F8F9FA',
+                    edgecolor='#2C3E50', linewidth=1.5, alpha=0.95))
+
+ax_d.set_title('D) Statistical Summary',
+               fontweight='bold', fontsize=11, loc='left', pad=15)
+
 
 # =============================================================================
-# Plot 3: June 2013 Predicted (Top-right)
+# GLOBAL TITLE
 # =============================================================================
-ax3 = fig.add_subplot(gs[0, 2])
-
-n_show3 = min(432, len(jun2013_df))
-x3 = np.arange(n_show3) * 5 / 60
-
-ax3.plot(x3, jun2013_df['predicted_mean'].values[:n_show3], 'r-', linewidth=1.5,
-         alpha=0.8, label='June 2013 Predicted')
-ax3.plot(x3, jun2013_df['actual'].values[:n_show3], 'b-', linewidth=1.0,
-         alpha=0.5, label='June 2012 Actual (ref)')
-
-ax3.fill_between(x3,
-                 jun2013_df['predicted_mean'].values[:n_show3] - jun2013_df['predicted_std'].values[:n_show3],
-                 jun2013_df['predicted_mean'].values[:n_show3] + jun2013_df['predicted_std'].values[:n_show3],
-                 alpha=0.2, color='red', label='±1 Std')
-
-ax3.set_xlabel('Hours from Start of June 2013', fontweight='bold', fontsize=11)
-ax3.set_ylabel('Speed (mph)', fontweight='bold', fontsize=11)
-ax3.set_title('C) June 2013 Predicted\n(Trained on all 2012 data)',
-              fontweight='bold', fontsize=12, loc='left')
-ax3.legend(loc='upper right', fontsize=9)
-ax3.grid(True, alpha=0.3, linestyle=':')
-ax3.set_xlim(0, n_show3*5/60)
-ax3.set_ylim(0, 75)
-
-jun2013_mean = jun2013_df['predicted_mean'].mean()
-ax3.text(0.02, 0.98, f'Mean: {jun2013_mean:.1f} mph',
-         transform=ax3.transAxes, fontsize=10, fontweight='bold',
-         verticalalignment='top',
-         bbox=dict(boxstyle='round', facecolor='#ecf0f1', alpha=0.9))
+fig.suptitle(
+    'Month-Ahead Traffic Forecasting: May 2012 vs May 2013\n'
+    'Autoregressive Projection Using Real 2013 Weather Data',
+    fontsize=15, fontweight='bold', y=0.99, color='#2C3E50'
+)
 
 # =============================================================================
-# Plot 4: MAE/Performance Comparison (Bottom-left)
+# FOOTER — summary metrics bar
 # =============================================================================
-ax4 = fig.add_subplot(gs[1, 0])
-
-months = ['May 2012', 'May 2013', 'June 2013']
-mae_vals = [
-    float(comp_df[comp_df['Metric'] == 'MAE (mph)']['May_2012'].values[0]),
-    float(comp_df[comp_df['Metric'] == 'MAE (mph)']['May_2013_Pred'].values[0]),
-    float(comp_df[comp_df['Metric'] == 'MAE (mph)']['June_2013_Pred'].values[0])
-]
-
-x_pos = np.arange(len(months))
-bars = ax4.bar(x_pos, mae_vals, width=0.5, color=['steelblue', 'indianred', 'indianred'],
-               edgecolor='black', linewidth=1, alpha=0.8)
-
-ax4.set_xlabel('Month', fontweight='bold', fontsize=11)
-ax4.set_ylabel('MAE (mph)', fontweight='bold', fontsize=11)
-ax4.set_title('D) Mean Absolute Error by Month',
-              fontweight='bold', fontsize=12, loc='left')
-ax4.set_xticks(x_pos)
-ax4.set_xticklabels(months)
-ax4.grid(True, alpha=0.3, linestyle=':', axis='y')
-ax4.set_ylim(0, max(mae_vals)*1.2)
-
-for bar in bars:
-    height = bar.get_height()
-    ax4.text(bar.get_x() + bar.get_width()/2, height + 0.1,
-            f'{height:.1f}', ha='center', fontsize=9, fontweight='bold')
+footer = (
+    f"May 2012  |  MAE: {mae_a:.2f} mph  |  RMSE: {rmse_a:.2f} mph  |  "
+    f"Avg Actual: {mean_actual_2012:.1f} mph  |  Avg Predicted: {mean_predicted_2012:.1f} mph        ||        "
+    f"May 2013  |  Avg Predicted: {mean_pred_b:.1f} mph  |  Historical Ref: {ref_mean:.1f} mph"
+)
+fig.text(0.5, 0.01, footer,
+         ha='center', va='bottom', fontsize=8, fontfamily='monospace',
+         bbox=dict(boxstyle='round,pad=0.5',
+                   facecolor='#F0F3F5',
+                   edgecolor='#AAB7C4', linewidth=1, alpha=0.95))
 
 # =============================================================================
-# Plot 5: Mean Speed Comparison (Bottom-center)
+# SAVE
 # =============================================================================
-ax5 = fig.add_subplot(gs[1, 1])
-
-means_actual = [
-    may2012_df['actual'].mean(),
-    may2013_df['actual'].mean(),  # May 2012 proxy
-    jun2013_df['actual'].mean()   # June 2012 proxy
-]
-means_pred = [
-    may2012_df['predicted_mean'].mean(),
-    may2013_df['predicted_mean'].mean(),
-    jun2013_df['predicted_mean'].mean()
-]
-
-x_v = np.arange(len(months))
-width_v = 0.35
-
-bars_act = ax5.bar(x_v - width_v/2, means_actual, width_v, label='Actual (Reference)',
-                   color='#2ecc71', edgecolor='black', linewidth=1, alpha=0.8)
-bars_pred = ax5.bar(x_v + width_v/2, means_pred, width_v, label='Predicted',
-                    color='#f39c12', edgecolor='black', linewidth=1, alpha=0.8)
-
-ax5.set_xlabel('Month', fontweight='bold', fontsize=11)
-ax5.set_ylabel('Average Speed (mph)', fontweight='bold', fontsize=11)
-ax5.set_title('E) Actual vs Predicted Mean Speed',
-              fontweight='bold', fontsize=12, loc='left')
-ax5.set_xticks(x_v)
-ax5.set_xticklabels(months)
-ax5.legend(loc='upper left', fontsize=9)
-ax5.grid(True, alpha=0.3, linestyle=':', axis='y')
-
-for bars in [bars_act, bars_pred]:
-    for bar in bars:
-        height = bar.get_height()
-        ax5.text(bar.get_x() + bar.get_width()/2, height + 0.3,
-                f'{height:.1f}', ha='center', fontsize=8, fontweight='bold')
-
-# =============================================================================
-# Plot 6: Summary Statistics (Bottom-right)
-# =============================================================================
-ax6 = fig.add_subplot(gs[1, 2])
-ax6.axis('off')
-
-# Calculate metrics
-may2012_bias = may2012_df['predicted_mean'].mean() - may2012_df['actual'].mean()
-may2013_bias = may2013_df['predicted_mean'].mean() - may2013_df['actual'].mean()
-jun2013_bias = jun2013_df['predicted_mean'].mean() - jun2013_df['actual'].mean()
-
-may2012_std_err = np.std(may2012_df['actual'] - may2012_df['predicted_mean'])
-may2013_std_err = np.std(may2013_df['actual'] - may2013_df['predicted_mean'])
-jun2013_std_err = np.std(jun2013_df['actual'] - jun2013_df['predicted_mean'])
-
-summary_text = f"""
-╔══════════════════════════════════════════════════╗
-║     MONTH-AHEAD FORECAST SUMMARY                  ║
-╠══════════════════════════════════════════════════╣
-║                                                  ║
-║  RESULTS:                                        ║
-║  ┌──────────────────────┬────────┬─────────────┐║
-║  │ Metric               │ May12  │ May13      │║
-║  ├──────────────────────┼────────┼─────────────┤║
-║  │ MAE (mph)            │ {mae_vals[0]:>6.2f} │ {mae_vals[1]:>6.2f}    │║
-║  │ Actual Mean Speed    │ {means_actual[0]:>6.1f} │ {means_actual[1]:>6.1f}    │║
-║  │ Predicted Mean       │ {means_pred[0]:>6.1f} │ {means_pred[1]:>6.1f}    │║
-║  │ Bias (pred-actual)   │ {may2012_bias:>+6.2f} │ {may2013_bias:>+6.2f}    │║
-║  └──────────────────────┴────────┴─────────────┘║
-║                                                  ║
-║  ┌──────────────────────┬────────┬─────────────┐║
-║  │ Metric               │ Jun13  │             │║
-║  ├──────────────────────┼────────┼─────────────┤║
-║  │ MAE (mph)            │ {mae_vals[2]:>6.2f} │             │║
-║  │ Actual Mean Speed    │ {means_actual[2]:>6.1f} │             │║
-║  │ Predicted Mean       │ {means_pred[2]:>6.1f} │             │║
-║  │ Bias (pred-actual)   │ {jun2013_bias:>+6.2f} │             │║
-║  └──────────────────────┴────────┴─────────────┘║
-║                                                  ║
-║  KEY FINDINGS:                                  ║
-║  • May 2013 predicted from 2012 training        ║
-║  • June 2013 predicted from 2012 training       ║
-║  • Demonstrates TEMPORAL GENERALIZATION         ║
-║  • Model works for SAME MONTH (May) and         ║
-║    DIFFERENT MONTH (June) prediction            ║
-║                                                  ║
-╚══════════════════════════════════════════════════╝
-"""
-
-ax6.text(0, 1.0, summary_text, transform=ax6.transAxes,
-         fontsize=9, fontfamily='monospace', verticalalignment='top',
-         bbox=dict(boxstyle='round', facecolor='#f8f9fa', alpha=0.95,
-                   edgecolor='#2c3e50', linewidth=1.5))
-
-ax6.set_title('F) Statistical Summary', fontweight='bold', fontsize=12, loc='left')
-
-# Main title
-plt.suptitle('Month-Ahead Traffic Forecasting: Predicting May & June 2013\n'
-             'Model Trained on 2012 Data Predicts Future Months',
-             fontsize=18, fontweight='bold', y=0.995, color='#2c3e50')
-
-plt.savefig('FIGURE4_month_ahead_comparison.png', bbox_inches='tight', dpi=200, pad_inches=0.3)
-print("   [SAVED] FIGURE4_month_ahead_comparison.png")
+out_path = 'FIGURE4_month_ahead_comparison.png'
+fig.savefig(out_path, dpi=200)
 plt.close()
 
+print(f"\n  [SAVED] {out_path}")
+
+# =============================================================================
+# VERIFICATION
+# =============================================================================
+if os.path.exists(out_path):
+    size_kb = os.path.getsize(out_path) / 1024
+    print(f"  File size: {size_kb:.0f} KB")
+else:
+    print("  ERROR: Output file not created!")
+    exit(1)
+
 print("\n" + "=" * 60)
-print("VISUALIZATION COMPLETE!")
+print("FIGURE 4 GENERATION COMPLETE")
 print("=" * 60)
-print("\nSummary:")
-print(f"   May 2012 MAE:  {mae_vals[0]:.2f} mph")
-print(f"   May 2013 Predicted MAE: N/A (no actual)")
-print(f"   June 2013 Predicted MAE: N/A (no actual)")
-print("\n   Note: May/June 2013 predictions use 2012 data as proxy")
-print("   for the same calendar month (temporal generalization)")
+print(f"\nPanels generated:")
+print(f"  A — May 2012 baseline: Actual vs Predicted (MAE={mae_a:.2f}, RMSE={rmse_a:.2f})")
+print(f"  B — May 2013 autoregressive forecast (vs 2012 reference)")
+print(f"  C — Error distribution (May 2012 only; 2013 N/A)")
+print(f"  D — Statistical summary table")
+print(f"\nKey metrics:")
+print(f"  May 2012 MAE:     {mae_a:.2f} mph")
+print(f"  May 2012 RMSE:    {rmse_a:.2f} mph")
+print(f"  May 2013 predicted mean: {mean_pred_b:.2f} mph")

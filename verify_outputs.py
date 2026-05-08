@@ -8,15 +8,15 @@ import os
 import pandas as pd
 import numpy as np
 
-print("="*70)
+print("=" * 70)
 print("TRAFFIC FORECASTING - OUTPUT VERIFICATION & BUG CHECK")
-print("="*70)
+print("=" * 70)
 
 # ============================================================================
 # 1. CHECK FOR CRITICAL BUG: 793+ mph values
 # ============================================================================
 print("\n[1] CHECKING FOR DOUBLE-SCALING BUG")
-print("-"*70)
+print("-" * 70)
 print("Bug: 'Actual' speeds showing 700-800 mph (should be 60-70 mph)")
 print("Cause: y_test * speed_std + speed_mean when y_test already unscaled\n")
 
@@ -32,20 +32,20 @@ for fname, label in [
         if 'actual' in df.columns:
             mean_actual = df['actual'].mean()
             mean_pred = df['predicted_mean'].mean()
-            
+
             # Flag if > 100 mph (impossible for LA traffic)
             if mean_actual > 100 or mean_pred > 100:
-                print(f"  ✗ {label}: Actual mean = {mean_actual:.2f} mph (BUG!)")
+                print(f"  [FAIL] {label}: Actual mean = {mean_actual:.2f} mph (BUG!)")
                 bug_detected = True
             else:
-                print(f"  ✓ {label}: Actual = {mean_actual:.2f} mph, Predicted = {mean_pred:.2f} mph")
+                print(f"  [OK] {label}: Actual = {mean_actual:.2f} mph, Predicted = {mean_pred:.2f} mph")
         else:
-            print(f"  ? {label}: No 'actual' column found")
+            print(f"  [?] {label}: No 'actual' column found")
     else:
-        print(f"  ✗ {label}: File missing")
+        print(f"  [FAIL] {label}: File missing")
 
 if bug_detected:
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("BUG DETECTED! Values > 100 mph indicate double-scaling.")
     print("FIX: In month_ahead_forecasting.py, change:")
     print("  may2013_actual = y_test2 * speed_std + speed_mean")
@@ -54,15 +54,15 @@ if bug_detected:
     print("  may2013_actual = y_test2")
     print("  jun2013_actual = y_test3")
     print("Then re-run month_ahead_forecasting.py")
-    print("="*70)
+    print("=" * 70)
 else:
-    print("\n✓ No double-scaling bug detected - values look realistic!")
+    print("\n[OK] No double-scaling bug detected - values look realistic!")
 
 # ============================================================================
 # 2. CHECK FOR MISSING OUTPUT FILES
 # ============================================================================
 print("\n[2] CHECKING FOR MISSING OUTPUT FILES")
-print("-"*70)
+print("-" * 70)
 
 required_files = {
     'METR_LA_with_Weather_5min.csv': 'Merged dataset (step2 output)',
@@ -81,17 +81,17 @@ for fname, desc in required_files.items():
     if os.path.exists(fname):
         size = os.path.getsize(fname)
         if fname.endswith('.png'):
-            print(f"  ✓ {desc:45s} [{size/1024:.0f} KB]")
+            print(f"  [OK] {desc:45s} [{size/1024:.0f} KB]")
         elif fname.endswith('.pt'):
-            print(f"  ✓ {desc:45s} [{size/1048576:.1f} MB]")
+            print(f"  [OK] {desc:45s} [{size/1048576:.1f} MB]")
         else:
-            print(f"  ✓ {desc:45s} [{size/1024:.0f} KB]")
+            print(f"  [OK] {desc:45s} [{size/1024:.0f} KB]")
     else:
-        print(f"  ✗ {desc:45s} [MISSING]")
+        print(f"  [FAIL] {desc:45s} [MISSING]")
         missing.append(fname)
 
 if missing:
-    print(f"\n⚠ Missing {len(missing)} file(s):")
+    print(f"\n[WARN] Missing {len(missing)} file(s):")
     for f in missing:
         print(f"  - {f}")
     print("\nRun these scripts to generate them:")
@@ -106,13 +106,13 @@ if missing:
     if 'METR_LA_with_Weather_5min.csv' in missing:
         print("  5. python step2_data_preprocessing.py")
 else:
-    print("\n✓ All required files present!")
+    print("\n[OK] All required files present!")
 
 # ============================================================================
 # 3. SUMMARY TABLE
 # ============================================================================
 print("\n[3] FINAL STATUS SUMMARY")
-print("-"*70)
+print("-" * 70)
 
 if os.path.exists('month_ahead_comparison.csv'):
     df = pd.read_csv('month_ahead_comparison.csv')
@@ -121,9 +121,9 @@ if os.path.exists('month_ahead_comparison.csv'):
 else:
     print("  month_ahead_comparison.csv not found")
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("NEXT STEPS:")
-print("="*70)
+print("=" * 70)
 if bug_detected:
     print("1. Fix double-scaling bug in month_ahead_forecasting.py")
     print("2. Re-run: python month_ahead_forecasting.py")
@@ -131,8 +131,8 @@ elif missing:
     print("1. Run missing scripts from list above")
     print("2. Re-run this verification script")
 else:
-    print("✓ ALL CHECKS PASSED")
-    print("✓ May 2013 and June 2013 predictions are realistic (~60-70 mph)")
-    print("✓ All figures and CSVs generated successfully")
+    print("[OK] ALL CHECKS PASSED")
+    print("[OK] May 2013 and June 2013 predictions are realistic (~60-70 mph)")
+    print("[OK] All figures and CSVs generated successfully")
     print("\nYou can now use these files for your thesis report!")
-print("="*70)
+print("=" * 70)

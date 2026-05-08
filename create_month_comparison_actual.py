@@ -16,7 +16,7 @@ print("=" * 60)
 # Load data
 df_full = pd.read_csv('METR_LA_with_Weather_5min.csv', index_col=0)
 df_full.index = pd.to_datetime(df_full.index)
-traffic_data = df_full['773869']
+traffic_data = df_full['traffic_speed']
 
 # Extract May 2012 actual
 may_2012 = traffic_data['2012-05']
