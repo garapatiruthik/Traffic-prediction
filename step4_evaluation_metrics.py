@@ -1,13 +1,13 @@
 """
 Step 4: Evaluation Metrics with KL Divergence
 ==============================================
-This script calculates comprehensive evaluation metrics for the Chronos-2
+This script calculates comprehensive evaluation metrics for the Chronos
 predictions including MAE, RMSE, and Kullback-Leibler (KL) Divergence.
 
 KL Divergence measures how well the predicted probability distribution
 matches the actual distribution - crucial for probabilistic forecasting.
 
-Author: Suvarna Kotha & Ruthik Garapati
+Author: Ruthik Garapati
 Thesis: Urban Traffic Forecasting - Comparative Analysis
 """
 
@@ -24,7 +24,7 @@ print("=" * 60)
 # ============================================================================
 # 4.1 Load Predictions
 # ============================================================================
-print("\n[4.1] Loading Chronos-2 predictions...")
+print("\n[4.1] Loading Chronos predictions...")
 
 try:
     df = pd.read_csv('chronos_predictions.csv')
@@ -246,7 +246,7 @@ print("COMPREHENSIVE MODEL COMPARISON")
 print("=" * 60)
 print(f"{'Model':<26} {'MAE (mph)':>11} {'RMSE (mph)':>11} {'KL':>10}")
 print("-" * 60)
-print(f"{'Chronos-2':<26} {mae:>11.4f} {rmse:>11.4f} {np.mean(kl_divergences):>10.6f}")
+print(f"{'Chronos':<26} {mae:>11.4f} {rmse:>11.4f} {np.mean(kl_divergences):>10.6f}")
 try:
     if 'mae_a' in dir():
         print(f"{'Mamba A (time only)':<26} {mae_a:>11.4f} {rmse_a:>11.4f} {'N/A':>10}")
@@ -260,7 +260,7 @@ print("\n" + "=" * 60)
 print("STEP 4 COMPLETE: Evaluation metrics calculated!")
 print("=" * 60)
 print("\nSummary:")
-print(f"  - Chronos-2 achieves {mae:.2f} mph MAE in zero-shot mode")
+print(f"  - Chronos achieves {mae:.2f} mph MAE in zero-shot mode")
 print(f"  - Symmetric KL (256 bins, eps=1e-9): {np.mean(kl_divergences):.6f}")
 print("\nNext step:")
 print("  - Run step5_mamba_training.py for weather ablation study")

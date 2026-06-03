@@ -13,7 +13,7 @@ For example: May 2012 (standard) vs May 2013 (autoregressive with real 2013 weat
 
 This replaces the old proxy simulation approach.
 
-Author: Suvarna Kotha & Ruthik Garapati
+Author: Ruthik Garapati
 Thesis: Urban Traffic Forecasting - Comparative Analysis
 """
 

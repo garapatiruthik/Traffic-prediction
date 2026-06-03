@@ -11,7 +11,7 @@ Key improvements for production readiness:
 3. Explicit 0.0 -> NaN imputation (dead sensor handling)
 4. Comprehensive logging for academic defense
 
-Author: Suvarna Kotha & Ruthik Garapati
+Author: Ruthik Garapati
 Thesis: Urban Traffic Forecasting - Comparative Analysis
 """
 

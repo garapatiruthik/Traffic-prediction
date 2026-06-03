@@ -1,19 +1,19 @@
 """
-Step 3: Chronos-2 Zero-Shot Inference Pipeline
+Step 3: Chronos Zero-Shot Inference Pipeline
 ==============================================
-This script runs zero-shot inference using Chronos-2 foundation model
+This script runs zero-shot inference using Chronos foundation model
 for urban traffic forecasting.
 
-Chronos-2 is a pre-trained time-series foundation model that can make
+Chronos is a pre-trained time-series foundation model that can make
 predictions without task-specific training (zero-shot).
 
 Features:
-- Loads Chronos-2 model from HuggingFace
+- Loads Chronos model from HuggingFace
 - Prepares METR-LA traffic data
 - Runs forecasting with configurable context/prediction lengths
 - Outputs probabilistic predictions for KL Divergence evaluation
 
-Author: Suvarna Kotha & Ruthik Garapati
+Author: Ruthik Garapati
 Thesis: Urban Traffic Forecasting - Comparative Analysis
 """
 
@@ -24,7 +24,7 @@ import time
 import os
 
 print("=" * 60)
-print("STEP 3: Chronos-2 Zero-Shot Inference")
+print("STEP 3: Chronos Zero-Shot Inference")
 print("=" * 60)
 
 # ============================================================================
@@ -32,15 +32,15 @@ print("=" * 60)
 # ============================================================================
 print("\n[3.1] Configuration...")
 
-# Chronos-2 model parameters
+# Chronos model parameters
 MODEL_NAME = "amazon/chronos-t5-small"  # Options: small, base, large
 PREDICTION_LENGTH = 12  # Predict next 12 timesteps (1 hour at 5-min intervals)
-CONTEXT_LENGTH = 144   # Use past 144 timesteps (12 hours of history)
+CONTEXT_LENGTH = 24   # Use past 24 timesteps (2 hours of history) to ensure 1:1 methodological parity with the Mamba baseline lookback window
 NUM_SAMPLES = 100       # Number of samples for probabilistic forecasting
 
 print(f"   - Model: {MODEL_NAME}")
 print(f"   - Prediction length: {PREDICTION_LENGTH} timesteps (1 hour)")
-print(f"   - Context length: {CONTEXT_LENGTH} timesteps (12 hours)")
+print(f"   - Context length: {CONTEXT_LENGTH} timesteps (2 hours)")
 print(f"   - Num samples: {NUM_SAMPLES}")
 
 # Check for GPU
@@ -66,16 +66,16 @@ except FileNotFoundError:
 # ============================================================================
 # 3.3 Install/Import Chronos
 # ============================================================================
-print("\n[3.3] Loading Chronos-2 model...")
+print("\n[3.3] Loading Chronos model...")
 from chronos import ChronosPipeline
 
 # ============================================================================
 # 3.3 Install/Import Chronos
 # ============================================================================
-print("\n[3.3] Loading Chronos-2 model...")
+print("\n[3.3] Loading Chronos model...")
 from chronos import ChronosPipeline
 
-# Load the Chronos-2 model
+# Load the Chronos model
 print(f"   Loading {MODEL_NAME}...")
 start_time = time.time()
 
@@ -250,7 +250,7 @@ with open('chronos_model_info.txt', 'w') as f:
 print("   - Saved to: chronos_model_info.txt")
 
 print("\n" + "=" * 60)
-print("STEP 3 COMPLETE: Chronos-2 inference finished!")
+print("STEP 3 COMPLETE: Chronos inference finished!")
 print("=" * 60)
 print("\nNext step:")
 print("  - Run step4_evaluation_metrics.py for detailed evaluation")

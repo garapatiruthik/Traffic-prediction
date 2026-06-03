@@ -81,7 +81,7 @@ fig1 = plt.figure(figsize=(20, 12))
 gs = GridSpec(3, 4, figure=fig1, hspace=0.35, wspace=0.3)
 
 # --- Unconditionally-defined base data (Chronos only) ---
-models       = ['Chronos-2\n(Foundation)', 'Mamba']
+models       = ['Chronos\n(Foundation)', 'Mamba']
 chronos_mae  = float(chronos_eval[chronos_eval['metric']=='MAE']['value'].values[0])
 chronos_rmse = float(chronos_eval[chronos_eval['metric']=='RMSE']['value'].values[0])
 chronos_kl   = float(chronos_eval[chronos_eval['metric']=='Mean_KL_Divergence']['value'].values[0])
@@ -150,7 +150,7 @@ ax4 = fig1.add_subplot(gs[0, 3])
 mamba_inf_sec = mamba_inf / 1000.0
 
 speed_vals = [chrono_inf, mamba_inf_sec]
-bar_labels = ['Chronos-2\n(Sec)', 'Mamba\n(Sec)']
+bar_labels = ['Chronos\n(Sec)', 'Mamba\n(Sec)']
 
 bars4 = ax4.bar(bar_labels, speed_vals, 
                 color=colors4, edgecolor='black', linewidth=1.5, alpha=0.85)
@@ -196,9 +196,9 @@ ax5.set_xlabel('Forecast Horizon (5-min intervals)', fontweight='bold')
 ax5.set_ylabel('Traffic Speed (mph)', fontweight='bold')
 _chronos_mae  = mae_values[0]
 _chronos_rmse = rmse_values[0]
-ax5.set_title('Chronos-2 Zero-Shot Forecast (12 steps = 1 hour ahead) | '
-              f'MAE={_chronos_mae:.2f}mph, RMSE={_chronos_rmse:.2f}mph',
-              fontweight='bold', fontsize=15)
+ax5.set_title('Chronos Zero-Shot Forecast (12 steps = 1 hour ahead) | '
+               f'MAE={_chronos_mae:.2f}mph, RMSE={_chronos_rmse:.2f}mph',
+               fontweight='bold', fontsize=15)
 ax5.legend(loc='upper right', fontsize=11, framealpha=0.95)
 ax5.grid(True, alpha=0.3)
 ax5.set_xticks(x_vals)
@@ -223,7 +223,7 @@ if mamba_history is not None:
     ax6.grid(True, alpha=0.3)
     ax6.set_xlim(0.5, len(mamba_history) + 0.5)
 
-plt.suptitle('URBAN TRAFFIC FORECASTING: Chronos-2 vs Mamba/State Space Model | '
+plt.suptitle('URBAN TRAFFIC FORECASTING: Chronos vs Mamba/State Space Model | '
              'METR-LA Dataset (March-June 2012)\n'
              'Features: Traffic Speed + Weather + Temporal (hour/day/month cyclical encoding)',
              fontsize=18, fontweight='bold', y=0.995)
@@ -389,7 +389,7 @@ print("  1. FIGURE1_model_comparison_dashboard.png")
 print("  2. FIGURE2_temporal_patterns.png")
 print("\nThese visualizations show:")
 print("  • Model performance comparison (MAE, RMSE, KL Divergence)")
-print("  • Chronos-2 vs Mamba inference speed")
+print("  • Chronos vs Mamba inference speed")
 print("  • Hourly/daily/monthly traffic patterns")
 print("  • Weather impact on traffic")
 print("  • Cyclical encoding (how model learns circular time)")
