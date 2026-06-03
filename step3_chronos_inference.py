@@ -53,7 +53,8 @@ print(f"   - Device: {device}")
 print("\n[3.2] Loading preprocessed data...")
 
 try:
-    df = pd.read_csv('single_sensor_with_weather.csv', index_col=0)
+    # Synchronised path to match the output from step2_data_preprocessing.py
+    df = pd.read_csv('METR_LA_with_Weather_5min.csv', index_col=0)
     df.index = pd.to_datetime(df.index)
     print(f"   - Loaded single sensor data: {df.shape}")
     print(f"   - Date range: {df.index.min()} to {df.index.max()}")
@@ -61,6 +62,12 @@ except FileNotFoundError:
     print("   ERROR: single_sensor_with_weather.csv not found!")
     print("   Please run step2_data_preprocessing.py first.")
     exit(1)
+
+# ============================================================================
+# 3.3 Install/Import Chronos
+# ============================================================================
+print("\n[3.3] Loading Chronos-2 model...")
+from chronos import ChronosPipeline
 
 # ============================================================================
 # 3.3 Install/Import Chronos
@@ -77,8 +84,28 @@ pipeline = ChronosPipeline.from_pretrained(
     device_map=device,
 )
 
+# Robust, multi-layer patch for HuggingFace Transformers cross-version compatibility
+# This forces both the backbone and generation config objects to accept the pad token as the decoder start index
+# Also sets bos_token_id as fallback for encoder-decoder compatibility
+for target in [pipeline.model, getattr(pipeline.model, 'model', None)]:
+    if target is not None:
+        if hasattr(target, 'config'):
+            # Set decoder_start_token_id if not set
+            if not hasattr(target.config, 'decoder_start_token_id') or target.config.decoder_start_token_id is None:
+                target.config.decoder_start_token_id = target.config.pad_token_id
+            # Set bos_token_id if not set (as fallback for decoder_start_token_id)
+            if not hasattr(target.config, 'bos_token_id') or target.config.bos_token_id is None:
+                target.config.bos_token_id = target.config.pad_token_id
+        if hasattr(target, 'generation_config') and target.generation_config is not None:
+            # Set decoder_start_token_id in generation config if not set
+            if not hasattr(target.generation_config, 'decoder_start_token_id') or target.generation_config.decoder_start_token_id is None:
+                target.generation_config.decoder_start_token_id = target.config.pad_token_id
+            # Set bos_token_id in generation config if not set
+            if not hasattr(target.generation_config, 'bos_token_id') or target.generation_config.bos_token_id is None:
+                target.generation_config.bos_token_id = target.config.pad_token_id
+
 load_time = time.time() - start_time
-print(f"   Model loaded in {load_time:.2f} seconds")
+print(f"   Model loaded and token mismatch patched in {load_time:.2f} seconds")
 
 # ============================================================================
 # 3.4 Prepare Data for Forecasting
@@ -113,8 +140,9 @@ print(f"   Running inference (this may take a minute)...")
 start_inference = time.time()
 
 # Chronos expects context as a tensor - use the forecast method
+# Aligned with the official amazon-science/chronos-forecasting API signature
 forecast = pipeline.predict(
-    inputs=torch.tensor(context, dtype=torch.float32).unsqueeze(0),
+    torch.tensor(context, dtype=torch.float32).unsqueeze(0),
     prediction_length=PREDICTION_LENGTH,
     num_samples=NUM_SAMPLES
 )

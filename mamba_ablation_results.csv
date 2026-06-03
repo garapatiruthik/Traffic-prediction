@@ -1,0 +1,3 @@
+model,test_MAE,test_RMSE,latency_ms,ckpt
+Model_A_time_only,5.113369464874268,8.739572525024414,1.5498920225761306,mamba_model_A.pt
+Model_B_time_weather,4.565160751342773,8.958499908447266,1.504276839780136,mamba_model_B.pt

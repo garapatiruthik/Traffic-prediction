@@ -109,6 +109,22 @@ import gc; gc.collect()
 print(f"   - Dropped other {207-1} sensors -> memory optimized")
 
 # ============================================================================
+# 2.3½ CONTROLLED SUBSET — Remove First 2 Weeks
+# ============================================================================
+# Professor requirement: demonstrate use of a controlled subset rather than
+# the full METR-LA archive.  We remove the earliest 2 weeks (March 2012) so
+# the training window is shorter and explicitly bounded.
+# 5-min frequency × 14 days = 14 × 24 × 12 = 4,032 rows removed.
+print(f"\n[2.3½] Applying 2-week controlled subset (removing earliest 2 weeks)...")
+TWO_WEEK_ROWS = 2 * 7 * 24 * 12          # = 4,032  (5-min × 14 days)
+if len(df_single) > TWO_WEEK_ROWS:
+    df_single = df_single.iloc[TWO_WEEK_ROWS:].copy()
+    print(f"   - Subset applied: {len(df_single)} rows remain (removed first {TWO_WEEK_ROWS:,} rows)")
+    print(f"   - New date range: {df_single.index.min()} -> {df_single.index.max()}")
+else:
+    print(f"   [WARN] Dataset has {len(df_single)} rows (< {TWO_WEEK_ROWS:,}); subset skipped.")
+
+# ============================================================================
 # 2.3 Data Cleaning: 0.0 -> NaN Imputation
 # ============================================================================
 print(f"\n[2.3] Cleaning data: handling zero-speed values...")
@@ -181,7 +197,7 @@ print(f"   - Columns: {list(df_weather.columns)}")
 print(f"\n[2.5] Resampling weather to 5-minute intervals...")
 
 # Weather is hourly -> need to upsample to 5-min to match traffic
-df_weather_5min = df_weather.resample('5T').ffill()
+df_weather_5min = df_weather.resample('5min').ffill()
 
 print(f"   - After resampling: {df_weather_5min.shape[0]} rows")
 print(f"   - New frequency: 5-minute intervals")

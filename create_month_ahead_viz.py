@@ -60,28 +60,50 @@ print("=" * 60)
 # =============================================================================
 print("\n[1] Loading prediction data...")
 
-# --- May 2012 ---
-may2012_df = pd.read_csv('mamba_predictions_may2012.csv')
+# --- May 2012  (Group B — primary + backup) ---
+_may2012_paths = ['mamba_predictions_may2012.csv', 'autoregressive_predictions_2012_standard.csv']
+_may2012_file = next((p for p in _may2012_paths if os.path.exists(p)), None)
+if _may2012_file is None:
+    raise FileNotFoundError("Could not find May 2012 prediction file — "
+                            "looked in: " + ", ".join(_may2012_paths))
+may2012_df = pd.read_csv(_may2012_file)
 may2012_df['timestamp'] = pd.to_datetime(may2012_df['timestamp'])
 print(f"  May 2012:    {len(may2012_df)} rows, cols={list(may2012_df.columns)}")
 
-# --- May 2013 ---
-may2013_df = pd.read_csv('mamba_predictions_may2013.csv')
+# --- May 2013  (Group C — primary + backup) ---
+_may2013_paths = ['mamba_predictions_may2013.csv', 'autoregressive_predictions_2013_rolling.csv']
+_may2013_file = next((p for p in _may2013_paths if os.path.exists(p)), None)
+if _may2013_file is None:
+    raise FileNotFoundError("Could not find May 2013 prediction file — "
+                            "looked in: " + ", ".join(_may2013_paths))
+may2013_df = pd.read_csv(_may2013_file)
 may2013_df['timestamp'] = pd.to_datetime(may2013_df['timestamp'])
 print(f"  May 2013:    {len(may2013_df)} rows, cols={list(may2013_df.columns)}")
 
-# --- Graceful handling of missing columns in May 2013 ---
-# The autoregressive pipeline produces NaN actuals and may produce
-# predicted_std from the model's probabilistic output head.
-may2013_has_actual     = 'actual'        in may2013_df.columns and not may2013_df['actual'].isna().all()
-may2013_has_pred_std   = 'predicted_std' in may2013_df.columns and not may2013_df['predicted_std'].isna().all()
-may2012_has_pred_std   = 'predicted_std' in may2012_df.columns and not may2012_df['predicted_std'].isna().all()
+# --- Graceful handling of missing columns in May 2013 / May 2012 ---
+# May 2012 files use 'actual_speed'; May 2013 files have NO ground-truth column.
+# Neither file provides 'predicted_std'.
+_actual_col_2012 = 'actual_speed' if 'actual_speed' in may2012_df.columns else (
+                   'actual'          if 'actual'          in may2012_df.columns else None)
+may2012_has_actual   = _actual_col_2012 is not None and not may2012_df[_actual_col_2012].isna().all()
+may2013_has_actual   = 'actual_speed' in may2013_df.columns and not may2013_df['actual_speed'].isna().all()
+may2013_has_actual   = may2013_has_actual or ('actual' in may2013_df.columns and not may2013_df['actual'].isna().all())
+may2012_has_pred_std = False   # neither 2012 nor 2013 file carries predicted_std
+may2013_has_pred_std = False
+
+# Show all weather columns that were returned by the forecasting script
+_weather_cols = [c for c in may2013_df.columns if c.startswith('weather_')]
+print(f"  May 2013 weather cols: {_weather_cols}" if _weather_cols else "")
 
 print(f"\n[2] Column availability check:")
-print(f"  May 2012 actual:       YES")
-print(f"  May 2012 predicted_std: {'YES' if may2012_has_pred_std else 'NO/MISSING'}")
-print(f"  May 2013 actual:       {'YES' if may2013_has_actual else 'NO/MISSING'}")
-print(f"  May 2013 predicted_std: {'YES' if may2013_has_pred_std else 'NO/MISSING'}")
+_a12  = 'YES' if may2012_has_actual     else 'NO/MISSING'
+_p12  = 'YES' if may2012_has_pred_std   else 'NO/MISSING'
+_a13  = 'YES' if may2013_has_actual     else 'NO/MISSING'
+_p13  = 'YES' if may2013_has_pred_std   else 'NO/MISSING'
+print(f"  May 2012 actual ({_actual_col_2012}):       {_a12}")
+print(f"  May 2012 predicted_std: {_p12}")
+print(f"  May 2013 actual:       {_a13}")
+print(f"  May 2013 predicted_std: {_p13}")
 
 # =============================================================================
 # PHASE 2: FIGURE — 4 PANELS (2x2 GridSpec)
@@ -112,8 +134,15 @@ ax_a = fig.add_subplot(gs[0, 0])
 
 x_a = np.arange(n_show_a) * 5.0 / 60.0     # 5-min steps → hours
 
-actual_a   = may2012_df['actual'].values[:n_show_a]
-pred_a     = may2012_df['predicted_mean'].values[:n_show_a]
+# --- Full-month arrays (metrics use the ENTIRE month, not just the plotted window)
+full_actual = may2012_df[_actual_col_2012].values
+full_pred   = may2012_df['predicted_mean'].values
+mae_a  = float(np.nanmean(np.abs(full_actual - full_pred)))
+rmse_a = float(np.sqrt(np.nanmean((full_actual - full_pred) ** 2)))
+
+# --- Sliced arrays for the 72-hour plot window ONLY
+actual_a   = full_actual[:n_show_a]
+pred_a     = full_pred[:n_show_a]
 pred_std_a = may2012_df['predicted_std'].values[:n_show_a] if may2012_has_pred_std else np.full(n_show_a, np.nan)
 
 ax_a.plot(x_a, actual_a, color=CLR_ACTUAL, linewidth=1.5,
@@ -139,9 +168,7 @@ ax_a.legend(loc='upper right', fontsize=8, framealpha=0.9)
 ax_a.tick_params(axis='both', which='major', labelsize=8)
 ax_a.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
 
-# MAE annotation
-mae_a  = float(np.mean(np.abs(actual_a - pred_a)))
-rmse_a = float(np.sqrt(np.mean((actual_a - pred_a) ** 2)))
+# MAE annotation (mae_a / rmse_a already calculated from full month above)
 ax_a.text(0.02, 0.97,
           f'MAE = {mae_a:.2f} mph  |  RMSE = {rmse_a:.2f} mph',
           transform=ax_a.transAxes, fontsize=9, fontweight='bold',
@@ -207,7 +234,7 @@ ax_b.text(0.02, 0.97,
 # ---------------------------------------------------------------
 ax_c = fig.add_subplot(gs[1, 0])
 
-errors_a = may2012_df['actual'].values - may2012_df['predicted_mean'].values
+errors_a = may2012_df[_actual_col_2012].values - may2012_df['predicted_mean'].values
 errors_a = errors_a[~np.isnan(errors_a)]
 
 # Trim > 4σ outliers for a cleaner histogram
@@ -242,60 +269,45 @@ ax_c.text(0.98, 0.95,
                     edgecolor='#D5D8DC', alpha=0.9))
 
 
-# ---------------------------------------------------------------
-# Panel D: Statistical Summary
-# ---------------------------------------------------------------
+# =============================================================================
+# D) Clean Native Month-Ahead Performance Table Fix
+# =============================================================================
 ax_d = fig.add_subplot(gs[1, 1])
-ax_d.axis('off')
+ax_d.axis('off')  # Strip wireframe coordinates container box
+ax_d.set_title('D) Performance & Macro Summaries', fontweight='bold', fontsize=12, loc='left')
 
-mean_actual_2012    = float(may2012_df['actual'].mean())
+df_a = may2012_df; df_b = may2013_df   # local aliases used by table rows
+
+metrics_data = [
+    ["Performance Parameter", "Calculated Baseline Values", "Unit Track"],
+    ["Mean Absolute Error (MAE)", f"{mae_a:.4f}", "mph"],
+    ["Root Mean Squared Error (RMSE)", f"{rmse_a:.4f}", "mph"],
+    ["May 2012 Ground-Truth Mean", f"{may2012_df[_actual_col_2012].mean():.2f}", "mph"],
+    ["May 2012 Predictive Mean", f"{df_a['predicted_mean'].mean():.2f}", "mph"],
+    ["May 2013 Autoregressive Mean", f"{df_b['predicted_mean'].mean():.2f}", "mph"],
+    ["Total Forecasting Steps", f"{len(df_b)}", "5-min intervals"]
+]
+
+# Generate balanced tabular matrix elements
+m_table = ax_d.table(cellText=metrics_data, loc='center', cellLoc='center')
+m_table.auto_set_font_size(False)
+m_table.set_fontsize(8.5)
+m_table.scale(1.0, 1.4)  # Professional tabular scaling ratio
+
+# Apply dark slate corporate profile theme to head columns
+for col in range(3):
+    h_cell = m_table[0, col]
+    h_cell.set_text_props(weight='bold', color='white')
+    h_cell.set_facecolor('#2c3e50')
+
+
+# =============================================================================
+# FOOTER VARIABLES (Panel B scope → shared before footer)
+# =============================================================================
+mean_actual_2012    = float(may2012_df[_actual_col_2012].mean())
 mean_predicted_2012 = float(may2012_df['predicted_mean'].mean())
-
-# Bias: predicted − actual
-bias_2012 = mean_predicted_2012 - mean_actual_2012
-
-summary_text = (
-    "  MAY 2012  (Baseline)                     \n"
-    "  ┌──────────────────────────────────────┐  \n"
-    f"  │  MAE:              {mae_a:>6.2f} mph       │  \n"
-    f"  │  RMSE:             {rmse_a:>6.2f} mph       │  \n"
-    f"  │  Actual Mean:      {mean_actual_2012:>6.2f} mph       │  \n"
-    f"  │  Predicted Mean:   {mean_predicted_2012:>6.2f} mph       │  \n"
-    f"  │  Bias (p−a):       {bias_2012:>+6.2f} mph       │  \n"
-    "  └──────────────────────────────────────┘     \n"
-    "                                               \n"
-    "  MAY 2013  (Autoregressive Projection)       \n"
-    "  ┌──────────────────────────────────────┐  \n"
-    f"  │  Predicted Mean:   {mean_pred_b:>6.2f} mph       │  \n"
-    f"  │  Pred Std (avg):   "
-)
-
-if may2013_has_pred_std:
-    summary_text += f"{pred_std_avg:>6.2f} mph       │  \n"
-else:
-    summary_text += "    N/A       │  \n"
-
-summary_text += (
-    "  │  Actual:            N/A  (none)     │  \n"
-    "  └──────────────────────────────────────┘     \n"
-    "                                               \n"
-    "  KEY FINDINGS:                                \n"
-    "  • May 2013 predicted mean ≈ May 2012 actual  \n"
-    "  • Model generalises across calendar years     \n"
-    "  • Year-over-year difference is small          \n"
-    "  • No ground truth available for 2013          "
-)
-
-ax_d.text(0.05, 0.95, summary_text,
-          transform=ax_d.transAxes, fontsize=9, fontfamily='monospace',
-          verticalalignment='top', linespacing=1.5,
-          bbox=dict(boxstyle='round,pad=0.6',
-                    facecolor='#F8F9FA',
-                    edgecolor='#2C3E50', linewidth=1.5, alpha=0.95))
-
-ax_d.set_title('D) Statistical Summary',
-               fontweight='bold', fontsize=11, loc='left', pad=15)
-
+mean_pred_b = float(np.nanmean(may2013_df['predicted_mean'].values))
+ref_mean    = float(np.nanmean(actual_a))
 
 # =============================================================================
 # GLOBAL TITLE

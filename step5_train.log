@@ -1,0 +1,98 @@
+============================================================
+STEP 5: Mamba Training for Traffic Forecasting
+============================================================
+
+[0] Device: cpu
+============================================================
+Loading and Preprocessing Data
+============================================================
+============================================================
+Downloading METR-LA Dataset
+============================================================
+File already exists: METR_LA_with_Weather_5min.csv
+
+[1] Loading dataset...
+    - Full dataset shape: (30240, 4)
+    - Date range: 2012-03-15 00:00:00 to 2012-06-27 23:55:00
+    - Selected speed column: traffic_speed
+    - Weather columns: ['weather_temperature_celsius', 'weather_precipitation_mm', 'weather_wind_speed_kmh']
+
+    Analyzing temporal patterns in data...
+    - Peak traffic hour: 21:00 (66.4 mph avg)
+    - Lowest traffic hour: 18:00 (40.9 mph avg)
+    - Busiest day: Sunday (66.2 mph avg)
+    - Quietest day: Friday (58.5 mph avg)
+    - Busiest week of year: Week 14 (64.5 mph avg)
+    - Quietest week of year: Week 12 (60.4 mph avg)
+    - Busiest month: Apr (63.2 mph avg)
+    - Quietest month: Jun (61.3 mph avg)
+    - Model will learn ALL these patterns automatically!
+    - Temporal features: hour_sin/cos, day_sin/cos, week_sin/cos, month_sin/cos
+
+[2] Data shape after preprocessing: (30240, 11)
+    - Speed range: 3.89 - 70.00 mph
+    - Precipitation range: 0.00 - 6.30 mm
+    - Wind speed range: 0.00 - 29.20 km/h
+    - Temporal features (11 total):
+      * Hourly (sin/cos): hour_sin, hour_cos
+      * Daily (sin/cos): day_sin, day_cos
+      * Weekly (sin/cos): week_sin, week_cos
+      * Monthly (sin/cos): month_sin, month_cos
+    - Model will LEARN all temporal patterns automatically!
+
+[3] Ablation feature sets:
+    Model A (time only) : 9 features -> ['speed', 'hour_sin', 'hour_cos', 'day_sin', 'day_cos', 'week_sin', 'week_cos', 'month_sin', 'month_cos']
+    Model B (+ weather)  : 11 features
+
+[4] Building train/val/test splits (leakage-free, train-only scaling)...
+    Model A  train=(21168, 24, 9)  val=(4536, 24, 9)  test=(4501, 24, 9)
+    Model B  train=(21168, 24, 11)  val=(4536, 24, 11)  test=(4501, 24, 11)
+WARNING: Native mamba_ssm not found or incompatible architecture. Falling back to parameter-matched FFN surrogate.
+
+  [Model_A_time_only] training started...
+    ep 1/10  train=0.8069  val=0.6546  lr=1.00e-03
+    ep 5/10  train=0.5432  val=0.7760  lr=1.00e-03
+    ep10/10  train=0.0918  val=0.7566  lr=5.00e-04
+    [OK] Model_A_time_only  best_val_loss=0.3313  -> mamba_model_A.pt
+WARNING: Native mamba_ssm not found or incompatible architecture. Falling back to parameter-matched FFN surrogate.
+
+  [Model_B_time_weather] training started...
+    ep 1/10  train=0.8094  val=0.4111  lr=1.00e-03
+    ep 5/10  train=0.5756  val=0.6684  lr=1.00e-03
+    ep10/10  train=0.1587  val=1.9693  lr=5.00e-04
+    [OK] Model_B_time_weather  best_val_loss=0.4111  -> mamba_model_B.pt
+
+    [OK] Saved training_history.csv (10 rows for Model A)
+
+============================================================
+ABLATION TEST RESULTS
+============================================================
+  Model_A_time_only           MAE=4.8983  RMSE=8.8213  latency=5.90ms
+  Model_B_time_weather        MAE=4.9644  RMSE=9.7010  latency=10.74ms
+
+[5] Saving ablation results...
+    - Saved: mamba_ablation_results.csv
+               model  test_MAE  test_RMSE  latency_ms             ckpt
+   Model_A_time_only  4.898274   8.821289    5.900079 mamba_model_A.pt
+Model_B_time_weather  4.964407   9.700954   10.736943 mamba_model_B.pt
+
+[6] Saving processed data tensors for generate_figures.py...
+    [OK] Saved: data\processed\processed_data.pt
+    - X_test_A=(4501, 24, 9)  y_test_A=(4501, 12)
+    - X_test_B=(4501, 24, 11)  y_test_B=(4501, 12)
+    - speed_mean_A=61.9958  speed_std_A=11.5626
+    - speed_mean_B=61.9958  speed_std_B=11.5626
+    [OK] Saved: data\processed\scaler_params.npz
+
+[LEGACY] Building backward-compatible mamba_evaluation_results.csv...
+WARNING: Native mamba_ssm not found or incompatible architecture. Falling back to parameter-matched FFN surrogate.
+    - Saved: mamba_evaluation_results.csv
+
+============================================================
+STEP 5 COMPLETE: Weather ablation training finished!
+============================================================
+
+Ablation summary:
+               model  test_MAE  test_RMSE  latency_ms             ckpt
+   Model_A_time_only  4.898274   8.821289    5.900079 mamba_model_A.pt
+Model_B_time_weather  4.964407   9.700954   10.736943 mamba_model_B.pt

@@ -1,8 +1,8 @@
-# FIXED COLAB RUNNER - Continues past optional step failures
+# FIXED COLAB RUNNER — no IPython magic, uses subprocess for installs
 import os, sys, subprocess
 
 print("="*70)
-print("TRAFFIC FORECASTING PIPELINE - COLAB RUNNER")
+print("TRAFFIC FORECASTING PIPELINE — COLAB RUNNER")
 print("="*70)
 
 # Install dependencies (with error handling)
@@ -12,13 +12,14 @@ try:
     print("✓ Core libraries already installed")
 except ImportError:
     print("Installing core libraries...")
-    !pip install pandas numpy scikit-learn matplotlib -q
+    subprocess.check_call([sys.executable, "-m", "pip", "install",
+                            "pandas", "numpy", "scikit-learn", "matplotlib", "-q"])
 
-# Chronos (optional - may fail on Colab due to compatibility)
+# Chronos (optional — may fail on Colab due to compatibility)
 print("\n[2] Installing Chronos-2...")
 chronos_installed = False
 try:
-    !pip install chronos-forecasting -q
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "chronos-forecasting", "-q"])
     from chronos import ChronosPipeline
     chronos_installed = True
     print("✓ Chronos-2 installed successfully")
@@ -26,14 +27,9 @@ except Exception as e:
     print(f"⚠ Chronos-2 installation failed: {e}")
     print("  → Chronos step will be skipped")
 
-# Mamba (GPU only, OK to fail on CPU)
-print("\n[3] Installing Mamba...")
-try:
-    !pip install mamba-ssm causal-conv1d -q
-    print("✓ Mamba installed")
-except Exception as e:
-    print(f"⚠ Mamba installation failed: {e}")
-    print("  → Will use FFN fallback (still works)")
+# Mamba (not required — scripts use FFN fallback, no mamba_ssm needed)
+print("\n[3] Mamba/optional packages...")
+print("  → Skipped (scripts use FFN-only State-Space model)")
 
 # ============================================================================
 # DEFINE SCRIPTS WITH DEPENDENCIES

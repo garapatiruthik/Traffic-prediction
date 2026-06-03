@@ -1,0 +1,19 @@
+{
+  "sensor_id": "speed",
+  "feat_count": 11,
+  "lookback": 24,
+  "horizon": 12,
+  "train_samples": 21168,
+  "val_samples": 3024,
+  "test_samples": 6048,
+  "original_range": {
+    "train_start": "2012-03-15 00:00:00",
+    "train_end": "2012-05-27 11:55:00",
+    "val_start": "2012-05-27 12:00:00",
+    "val_end": "2012-06-06 23:55:00",
+    "test_start": "2012-06-07 00:00:00",
+    "test_end": "2012-06-27 23:55:00"
+  },
+  "speed_mean": 61.99584476063373,
+  "speed_std": 11.562597364094803
+}

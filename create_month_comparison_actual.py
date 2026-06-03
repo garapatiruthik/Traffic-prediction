@@ -1,3 +1,6 @@
+import os
+import sys
+sys.stdout.reconfigure(encoding='utf-8')   # Windows cp1252 → UTF-8 guard
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -21,14 +24,17 @@ traffic_data = df_full['traffic_speed']
 # Extract May 2012 actual
 may_2012 = traffic_data['2012-05']
 
-# Load May 2013 predicted data
-try:
-    may2013_pred_df = pd.read_csv('mamba_predictions_may2013.csv')
-    may_2013_pred = may2013_pred_df['predicted_mean'].values
-    print(f"\nMay 2013 Predicted: {len(may_2013_pred)} points, mean={may_2013_pred.mean():.2f} mph")
-except FileNotFoundError:
-    print("   ERROR: Run month_ahead_forecasting.py first to generate May 2013 predictions!")
+# Load May 2013 predicted data (Group C — primary + backup)
+_may2013_paths = ['mamba_predictions_may2013.csv', 'autoregressive_predictions_2013_rolling.csv']
+_may2013_file = next((p for p in _may2013_paths if os.path.exists(p)), None)
+if _may2013_file is None:
+    print("   ERROR: None of the expected prediction files found:")
+    for _p in _may2013_paths:
+        print(f"      - {_p}")
     exit(1)
+may2013_pred_df = pd.read_csv(_may2013_file)
+may_2013_pred = may2013_pred_df['predicted_mean'].values
+print(f"\nMay 2013 Predicted: {len(may_2013_pred)} points, mean={may_2013_pred.mean():.2f} mph")
 
 print(f"May 2012 Actual:   {len(may_2012)} points, mean={may_2012.mean():.2f} mph")
 print(f"May 2013 Predicted: {len(may_2013_pred)} points, mean={may_2013_pred.mean():.2f} mph")
@@ -200,24 +206,22 @@ ax5.text(0.5, -0.9,
          bbox=dict(boxstyle='round', facecolor='#fff3cd', alpha=0.9))
 
 # =============================================================================
-# Plot 6: Scatter comparison (F)
+# Plot 6: Hourly profile scatter (F) — hour-level correlation, no calendar shift
 # =============================================================================
 ax6 = fig.add_subplot(gs[2, 1])
 
-# Sample matching hours
-sample_size = min(2000, len(may2012_series), len(may2013_pred_series))
-np.random.seed(42)
-max_idx = min(len(may2012_series), len(may2013_pred_series))
-sample_idx = np.random.choice(max_idx, size=sample_size, replace=False)
-may2012_sample = may2012_series.iloc[sample_idx]
-may2013_sample = may2013_pred_series.iloc[sample_idx]
+# Use pre-computed hourly averages (24 points = one per hour of day)
+# This avoids the calendar-day-shift fallacy of raw 5-min interval comparison
+may2012_hourly = may2012_series.groupby(may2012_series.index.hour).mean()
+may2013_hourly = may2013_pred_series.groupby(may2013_pred_series.index.hour).mean()
 
-ax6.scatter(may2012_sample, may2013_sample, alpha=0.3, s=20, color='#3498db', edgecolors='none')
+ax6.scatter(may2012_hourly, may2013_hourly, alpha=0.7, s=80,
+            color='#3498db', edgecolors='black', linewidth=0.8, zorder=3, label='Hourly Avg')
 ax6.plot([0, 70], [0, 70], 'r--', linewidth=2, alpha=0.7, label='Perfect Match')
 
-ax6.set_xlabel('May 2012 Actual Speed (mph)', fontweight='bold', fontsize=11)
-ax6.set_ylabel('May 2013 Predicted Speed (mph)', fontweight='bold', fontsize=11)
-ax6.set_title('F) May 2012 vs May 2013 Predicted Scatter',
+ax6.set_xlabel('May 2012 Hourly Avg (mph)', fontweight='bold', fontsize=11)
+ax6.set_ylabel('May 2013 Predicted Hourly Avg (mph)', fontweight='bold', fontsize=11)
+ax6.set_title('F) Hourly Profile Correlation\n(Pattern consistency year-over-year)',
               fontweight='bold', fontsize=12, loc='left', pad=10)
 ax6.legend(loc='upper left', fontsize=9)
 ax6.grid(True, alpha=0.3, linestyle=':')
@@ -225,9 +229,9 @@ ax6.set_aspect('equal')
 ax6.set_xlim(0, 70)
 ax6.set_ylim(0, 70)
 
-# Correlation text
+# Correlation on aligned hourly averages (not raw 5-min intervals)
 from scipy import stats
-r, p = stats.pearsonr(may2012_sample, may2013_sample)
+r, p = stats.pearsonr(may2012_hourly, may2013_hourly)
 ax6.text(0.05, 0.95,
          f'Correlation: r = {r:.3f}\n'
          f'R² = {r**2:.3f}\n'
@@ -238,59 +242,41 @@ ax6.text(0.05, 0.95,
                    edgecolor='gray', linewidth=1))
 
 # =============================================================================
-# Plot 7: Summary panel (G)
+# G) Clean Native Statistical Table Fix
 # =============================================================================
 ax7 = fig.add_subplot(gs[2, 2])
-ax7.axis('off')
-
-# Stats
-diff = may2013_pred_series.mean() - may2012_series.mean()
-diff_pct = abs(diff) / may2012_series.mean() * 100
-
-may2012_hourly = may2012_series.groupby(may2012_series.index.hour).mean()
-may2013_hourly = may2013_pred_series.groupby(may2013_pred_series.index.hour).mean()
-hourly_diff = np.mean(np.abs(may2013_hourly - may2012_hourly))
-
-may2012_dow = may2012_series.groupby(may2012_series.index.dayofweek).mean()
-may2013_dow = may2013_pred_series.groupby(may2013_pred_series.index.dayofweek).mean()
-dow_diff = np.mean(np.abs(may2013_dow - may2012_dow))
-
-overall_corr = np.corrcoef(may2012_series.values[:max_idx], may2013_pred_series.values[:max_idx])[0,1]
-
-# Monospace table
-table_text = f"""
-╔══════════════════════════════════════════════════╗
-║   MAY 2012 vs MAY 2013 PREDICTED SUMMARY          ║
-╠══════════════════════════════════════════════════╣
-║                                                  ║
-║  AVERAGE SPEED:                                 ║
-║    • May 2012 Actual:   {may2012_series.mean():>6.2f} mph                      ║
-║    • May 2013 Predicted:  {may2013_pred_series.mean():>6.2f} mph                      ║
-║    • Difference: {diff:>+6.2f} mph ({diff_pct:.1f}%)                ║
-║                                                  ║
-║  VARIABILITY:                                   ║
-║    • May 2012 Std:    {may2012_series.std():>6.2f} mph                      ║
-║    • May 2013 Std:   {may2013_pred_series.std():>6.2f} mph                      ║
-║                                                  ║
-║  PATTERN DIFFERENCES:                           ║
-║    • Avg hourly diff:  {hourly_diff:>5.2f} mph                      ║
-║    • Avg dow diff:     {dow_diff:>5.2f} mph                      ║
-║    • Overall r:        {overall_corr:>6.3f}                          ║
-║                                                  ║
-║  KEY FINDING:                                   ║
-║  Model predicts May 2013 from 2012 training     ║
-║  This demonstrates TEMPORAL GENERALIZATION      ║
-║  (same month, previous year prediction)         ║
-║                                                  ║
-╚══════════════════════════════════════════════════╝
-"""
-
-ax7.text(0, 1.0, table_text, transform=ax7.transAxes,
-         fontsize=9, fontfamily='monospace', verticalalignment='top',
-         bbox=dict(boxstyle='round', facecolor='#f8f9fa', alpha=0.95,
-                   edgecolor='#2c3e50', linewidth=1.5))
-
+ax7.axis('off')  # Drop default axis background wires
 ax7.set_title('G) Statistical Summary', fontweight='bold', fontsize=12, loc='left')
+
+# Build reconstruction parameters to track panel tracking sheets
+may2012_series = pd.Series(may_2012)
+may2013_pred_series = pd.Series(may_2013_pred)
+diff_pct = abs(may2013_pred_series.mean() - may2012_series.mean()) / may2012_series.mean() * 100
+diff = may2013_pred_series.mean() - may2012_series.mean()
+
+# Reconstruct data parameters to match exact metrics baseline tracking sheets
+table_data = [
+    ["Evaluation Category", "May 2012 Actual", "May 2013 Predicted"],
+    ["Total Sample Steps", f"{len(may2012_series)}", f"{len(may2013_pred_series)}"],
+    ["Mean Velocity", f"{may2012_series.mean():.2f} mph", f"{may2013_pred_series.mean():.2f} mph"],
+    ["Velocity Std Dev", f"{may2012_series.std():.2f} mph", f"{may2013_pred_series.std():.2f} mph"],
+    ["Minimum Speed", f"{may2012_series.min():.2f} mph", f"{may2013_pred_series.min():.2f} mph"],
+    ["Maximum Speed", f"{may2012_series.max():.2f} mph", f"{may2013_pred_series.max():.2f} mph"],
+    ["Absolute Delta", "-", f"{abs(may2013_pred_series.mean() - may2012_series.mean()):.2f} mph"],
+    ["Percentage Deviation", "-", f"{diff_pct:.2f}%"]
+]
+
+# Draw native structured bounding cell grid layout
+b_table = ax7.table(cellText=table_data, loc='center', cellLoc='center')
+b_table.auto_set_font_size(False)
+b_table.set_fontsize(8.5)
+b_table.scale(1.0, 1.35)  # Ideal structural row padding adjustments
+
+# Format title header cells to clear academic publication themes
+for col in range(3):
+    cell = b_table[0, col]
+    cell.set_text_props(weight='bold', color='white')
+    cell.set_facecolor('#2c3e50')
 
 # Main title
 plt.suptitle('Traffic Forecasting: May 2012 Actual vs May 2013 Predicted\n'
